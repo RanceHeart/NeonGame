@@ -18,8 +18,6 @@ export function createHarutePlayer() {
     id: 'player.harute',
     tags: ['player'],
     alive: true,
-
-    // --- Physics ---
     x: 0,
     y: 0,
     vx: 0,
@@ -28,7 +26,6 @@ export function createHarutePlayer() {
     friction: 0.92,
     maxSpeed: 9.0,
 
-    // --- Thrusters ---
     thrusters: {
       main: 0,
       brake: 0,
@@ -71,13 +68,13 @@ export function createHarutePlayer() {
 
       let speedMult = 1.0;
       if (mode === 'MARUTE') speedMult = 1.5;
-      if (mode === 'BURST') speedMult = 2.5;
+      // Burst 速度加成已移除
 
       // Apply Force
       player.vx += dx * player.accel * speedMult;
       player.vy += dy * player.accel * speedMult;
 
-      const currentFriction = mode === 'BURST' ? 0.96 : player.friction;
+      const currentFriction = player.friction; // Burst 摩擦力移除
       player.vx *= currentFriction;
       player.vy *= currentFriction;
 
@@ -103,11 +100,10 @@ export function createHarutePlayer() {
       let targetMain = 0.2;
       if (dy < 0) targetMain = 1.0;
       if (mode === 'MARUTE') targetMain = Math.max(targetMain, 0.4);
-      if (mode === 'BURST') targetMain = 2.0;
+      // Burst 推进器力度移除
 
       player.thrusters.main +=
-        (targetMain - player.thrusters.main) *
-        (dy < 0 || mode === 'BURST' ? rampUp : rampDown);
+        (targetMain - player.thrusters.main) * (dy < 0 ? rampUp : rampDown);
 
       const inputDown = dy > 0;
       player.thrusters.brake +=
@@ -123,7 +119,7 @@ export function createHarutePlayer() {
 
       emitGNParticles(g, player, mode);
 
-      const targetTf = mode === 'MARUTE' || mode === 'BURST' ? 1 : 0;
+      const targetTf = mode === 'MARUTE' ? 1 : 0;
       player.transformFactor += (targetTf - player.transformFactor) * 0.08;
 
       const targetMissile =
@@ -141,16 +137,9 @@ export function createHarutePlayer() {
       ctx.save();
       ctx.translate(player.x, player.y);
 
-      // 1. Main Central Thruster (Engine)
       drawMainThrusters(ctx, player, mode, g.time.frame);
-
-      // 2. Main Body & Binders (Now includes Side Thrusters to prevent overlap)
       drawShipBody(ctx, player, mode);
-
-      // 3. Weapons (Rifle geometry)
       weapons.RIFLE.render(g, player);
-
-      // 4. Air Brakes (Top Layer)
       drawBrakeThrusters(ctx, player);
 
       ctx.restore();
@@ -171,33 +160,32 @@ export function createHarutePlayer() {
 function emitGNParticles(g, player, mode) {
   let gnColor = '#00ffaa';
   if (mode === 'MARUTE') gnColor = '#ff003c';
-  if (mode === 'BURST') gnColor = '#00ffff';
+  // Burst 颜色移除
 
   // Main engine sparks
   if (player.thrusters.main > 0.3) {
-    const multiplier = mode === 'BURST' ? 4 : 1;
-    const count = Math.floor(player.thrusters.main * 2 * multiplier);
+    const count = Math.floor(player.thrusters.main * 2);
 
     for (let i = 0; i < count; i++) {
       g.spawn.particle({
         type: 'spark',
         x: player.x + (Math.random() - 0.5) * 12,
         y: player.y + 70,
-        vx: (Math.random() - 0.5) * (mode === 'BURST' ? 10 : 2),
-        vy: 4 + Math.random() * 6 + (mode === 'BURST' ? 10 : 0),
+        vx: (Math.random() - 0.5) * 2,
+        vy: 4 + Math.random() * 6,
         color: gnColor,
-        size: (2 + Math.random() * 2) * (mode === 'BURST' ? 1.5 : 1),
+        size: 2 + Math.random() * 2,
         decay: 0.06,
       });
     }
   }
 
-  // Side thruster smoke (Visual only, distinct from flame geometry)
+  // Side thruster smoke
   const sideOpts = { type: 'gn_smoke', color: gnColor, size: 3, decay: 0.15 };
   if (player.thrusters.leftSide > 0.3 && g.time.frame % 2 === 0) {
     g.spawn.particle({
       ...sideOpts,
-      x: player.x - 85, // Updated position
+      x: player.x - 85,
       y: player.y - 10,
       vx: -5,
     });
@@ -205,7 +193,7 @@ function emitGNParticles(g, player, mode) {
   if (player.thrusters.rightSide > 0.3 && g.time.frame % 2 === 0) {
     g.spawn.particle({
       ...sideOpts,
-      x: player.x + 85, // Updated position
+      x: player.x + 85,
       y: player.y - 10,
       vx: 5,
     });
@@ -218,14 +206,13 @@ function drawMainThrusters(ctx, player, mode, frame) {
 
   let color = '#00ffaa';
   if (mode === 'MARUTE') color = '#ff003c';
-  if (mode === 'BURST') color = '#aaffff';
 
   ctx.save();
   ctx.translate(0, 80);
 
-  const isBurst = mode === 'BURST';
-  const beamLen = isBurst ? 300 + Math.random() * 50 : 30 + p * 90;
-  const beamW = isBurst ? 25 + Math.random() * 5 : 10 + p * 8;
+  // Burst 极长尾焰移除，恢复正常逻辑
+  const beamLen = 30 + p * 90;
+  const beamW = 10 + p * 8;
 
   const grad = ctx.createLinearGradient(0, 0, 0, beamLen);
   grad.addColorStop(0, '#ffffff');
@@ -247,9 +234,7 @@ function drawBrakeThrusters(ctx, player) {
   if (p < 0.1) return;
   ctx.save();
   ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  // Front air brake flaps
-  const vents = [-1, 1];
-  vents.forEach((side) => {
+  [-1, 1].forEach((side) => {
     ctx.beginPath();
     ctx.arc(side * 20, -30, 2 + p * 3, 0, Math.PI * 2);
     ctx.fill();
@@ -261,8 +246,8 @@ function drawShipBody(ctx, player, mode) {
   const tf = player.transformFactor;
   const spread = tf * 25;
   const noseSplit = tf * 12;
-  const isMaruteOrBurst = mode === 'MARUTE' || mode === 'BURST';
-  const gnColor = isMaruteOrBurst ? '#ff003c' : '#00ffaa';
+  const isMarute = mode === 'MARUTE';
+  const gnColor = isMarute ? '#ff003c' : '#00ffaa';
 
   // 1. Central Fuselage
   ctx.save();
@@ -274,25 +259,17 @@ function drawShipBody(ctx, player, mode) {
   ctx.lineTo(-8, 60);
   ctx.lineTo(-12, 0);
   ctx.fill();
-
-  // Rear Engine Block
   ctx.fillStyle = '#1a1a20';
   ctx.fillRect(-10, 50, 20, 30);
   ctx.restore();
 
-  // 2. Large Weapon Binders (Integrated with Side Thrusters)
+  // 2. Large Weapon Binders
   [-1, 1].forEach((side) => {
-    // Select the correct thruster value for this side
-    // If side is -1 (Left), use leftSide thruster power
-    // If side is 1 (Right), use rightSide thruster power
     const thrusterPower =
       side === -1 ? player.thrusters.leftSide : player.thrusters.rightSide;
-
     ctx.save();
     ctx.scale(side, 1);
     ctx.translate(45 + spread, 0);
-
-    // Pass the thruster power to the binder drawing function
     drawWeaponBinder(ctx, player, mode, side, gnColor, thrusterPower);
     ctx.restore();
   });
@@ -301,7 +278,6 @@ function drawShipBody(ctx, player, mode) {
   [-1, 1].forEach((side) => {
     ctx.save();
     ctx.translate(side * noseSplit, -35);
-
     ctx.fillStyle = '#eee';
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -309,7 +285,6 @@ function drawShipBody(ctx, player, mode) {
     ctx.lineTo(side * 8, -65);
     ctx.lineTo(0, -75);
     ctx.fill();
-
     ctx.fillStyle = '#333';
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -317,8 +292,6 @@ function drawShipBody(ctx, player, mode) {
     ctx.lineTo(side * 2, -50);
     ctx.lineTo(0, -60);
     ctx.fill();
-
-    // Sensor strip
     ctx.fillStyle = gnColor;
     ctx.globalAlpha = 0.8;
     ctx.beginPath();
@@ -330,7 +303,7 @@ function drawShipBody(ctx, player, mode) {
     ctx.restore();
   });
 
-  // 4. Marute Face (Transformation Detail)
+  // 4. Marute Face
   if (tf > 0.2) {
     ctx.save();
     ctx.translate(0, -60);
@@ -349,7 +322,7 @@ function drawShipBody(ctx, player, mode) {
     ctx.restore();
   }
 
-  // 5. Cockpit Canopy
+  // 5. Cockpit
   ctx.fillStyle = '#111';
   ctx.beginPath();
   ctx.moveTo(0, -35);
@@ -365,12 +338,7 @@ function drawShipBody(ctx, player, mode) {
   ctx.fill();
 }
 
-/**
- * Draws the Weapon Binder, Missile Hatches, AND the Side Thruster Pod.
- * All in one coordinate system to prevent overlapping.
- */
 function drawWeaponBinder(ctx, player, mode, side, gnColor, thrusterPower) {
-  // --- 1. Main Binder Body (Orange/White) ---
   const grad = ctx.createLinearGradient(-15, 0, 30, 0);
   grad.addColorStop(0, '#ddd');
   grad.addColorStop(0.4, '#ff9500');
@@ -380,10 +348,10 @@ function drawWeaponBinder(ctx, player, mode, side, gnColor, thrusterPower) {
   ctx.beginPath();
   ctx.moveTo(-15, -55);
   ctx.lineTo(15, -55);
-  ctx.lineTo(28, -20); // Top-right corner
-  ctx.lineTo(28, 40); // Bottom-right corner
-  ctx.lineTo(10, 60); // Bottom-center point
-  ctx.lineTo(-10, 50); // Bottom-left
+  ctx.lineTo(28, -20);
+  ctx.lineTo(28, 40);
+  ctx.lineTo(10, 60);
+  ctx.lineTo(-10, 50);
   ctx.lineTo(-15, -55);
   ctx.fill();
 
@@ -391,10 +359,8 @@ function drawWeaponBinder(ctx, player, mode, side, gnColor, thrusterPower) {
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // --- 2. Missile Hatch Array ---
   const hatchColor = player.missileOpen > 0.5 ? '#1a1a1a' : '#d0d0d0';
   ctx.fillStyle = hatchColor;
-
   for (let row = 0; row < 4; row++) {
     for (let col = 0; col < 2; col++) {
       const mx = -10 + col * 10;
@@ -408,13 +374,11 @@ function drawWeaponBinder(ctx, player, mode, side, gnColor, thrusterPower) {
     }
   }
 
-  // --- 3. Inner Mechanism Details ---
   ctx.fillStyle = '#333';
   ctx.fillRect(-12, 10, 8, 35);
   ctx.fillStyle = '#111';
   ctx.fillRect(-10, 10, 4, 35);
 
-  // --- 4. Outer Stabilizer Plate ---
   ctx.fillStyle = '#444';
   ctx.beginPath();
   ctx.moveTo(28, -20);
@@ -423,39 +387,33 @@ function drawWeaponBinder(ctx, player, mode, side, gnColor, thrusterPower) {
   ctx.lineTo(28, 40);
   ctx.fill();
 
-  // --- 5. Condenser / Sensor Strip ---
   ctx.fillStyle = gnColor;
   ctx.shadowColor = gnColor;
   ctx.shadowBlur = 8;
   ctx.fillRect(18, -10, 4, 40);
-  if (mode === 'MARUTE' || mode === 'BURST') {
+  if (mode === 'MARUTE') {
     ctx.fillRect(-15, 20, 3, 20);
   }
   ctx.shadowBlur = 0;
 
-  // --- 6. SIDE THRUSTER POD (NEW GEOMETRY) ---
-  // A dedicated pod attached to the outer side to house the lateral thruster.
-  // Located at x > 32 to clear the main body.
+  // Side Thruster Pod
   const podColor = '#222';
   const podHighlight = '#444';
 
   ctx.save();
-  ctx.translate(32, -5); // Position outside the binder block
+  ctx.translate(32, -5);
 
-  // Pod Housing
   ctx.fillStyle = podColor;
   ctx.beginPath();
   ctx.moveTo(0, -10);
-  ctx.lineTo(12, -5); // Protrudes out
+  ctx.lineTo(12, -5);
   ctx.lineTo(12, 25);
   ctx.lineTo(0, 30);
   ctx.fill();
 
-  // Mechanical detail
   ctx.fillStyle = podHighlight;
   ctx.fillRect(0, 0, 8, 20);
 
-  // Nozzle (Where the flame comes out)
   ctx.fillStyle = '#111';
   ctx.beginPath();
   ctx.moveTo(8, 2);
@@ -464,28 +422,21 @@ function drawWeaponBinder(ctx, player, mode, side, gnColor, thrusterPower) {
   ctx.lineTo(8, 18);
   ctx.fill();
 
-  // --- 7. THE FLAME (Integrated) ---
   if (thrusterPower > 0.1) {
     let flameColor = mode === 'MARUTE' ? '#ff003c' : '#00ffaa';
-    if (mode === 'BURST') flameColor = '#00ffff';
 
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = flameColor;
     ctx.shadowBlur = 15;
     ctx.shadowColor = flameColor;
 
-    // Draw flame extending from the nozzle (x=14)
     ctx.beginPath();
     ctx.moveTo(14, 5);
-    // Length depends on power
     const len = 14 + thrusterPower * 30 + Math.random() * 5;
-    const wid = 5 + thrusterPower * 5;
-
-    ctx.lineTo(len, 10); // Tip
+    ctx.lineTo(len, 10);
     ctx.lineTo(14, 15);
     ctx.fill();
 
-    // Inner white core
     ctx.fillStyle = '#fff';
     ctx.shadowBlur = 5;
     ctx.beginPath();

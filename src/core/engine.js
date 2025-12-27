@@ -35,6 +35,7 @@ export function createEngine({ mountEl, scene }) {
   resize();
 
   const g = {
+    mountEl, // ✅ 加这个
     ctx2d: { bg, main },
     screen,
     time,

@@ -1,7 +1,10 @@
 // src/core/input.js
 export function createInput({ targetEl }) {
   const pointer = { x: 0, y: 0, down: false, justDown: false, justUp: false };
-  const keys = {}; // Store keyboard state
+
+  const keys = {};
+  const keysJustDown = {};
+  const keysJustUp = {};
 
   const toLocal = (clientX, clientY) => {
     const r = targetEl.getBoundingClientRect();
@@ -27,15 +30,22 @@ export function createInput({ targetEl }) {
     pointer.justUp = true;
   };
 
-  // Pointer Events
-  targetEl.addEventListener('mousedown', (e) => onDown(e.clientX, e.clientY));
-  window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
-  window.addEventListener('mouseup', onUp);
+  targetEl.addEventListener('mousedown', (e) => {
+    onDown(e.clientX, e.clientY);
+  });
+  window.addEventListener('mousemove', (e) => {
+    onMove(e.clientX, e.clientY);
+  });
+  window.addEventListener('mouseup', () => {
+    onUp();
+  });
 
   targetEl.addEventListener(
     'touchstart',
     (e) => {
-      if (e.cancelable) e.preventDefault();
+      if (e.cancelable) {
+        e.preventDefault();
+      }
       const t = e.touches[0];
       onDown(t.clientX, t.clientY);
     },
@@ -44,7 +54,9 @@ export function createInput({ targetEl }) {
   targetEl.addEventListener(
     'touchmove',
     (e) => {
-      if (e.cancelable) e.preventDefault();
+      if (e.cancelable) {
+        e.preventDefault();
+      }
       const t = e.touches[0];
       onMove(t.clientX, t.clientY);
     },
@@ -53,26 +65,53 @@ export function createInput({ targetEl }) {
   targetEl.addEventListener(
     'touchend',
     (e) => {
-      if (e.cancelable) e.preventDefault();
+      if (e.cancelable) {
+        e.preventDefault();
+      }
       onUp();
     },
     { passive: false },
   );
 
-  // --- Keyboard Support Added ---
   window.addEventListener('keydown', (e) => {
-    keys[e.code] = true;
-    keys[e.key] = true; // Support both 'KeyW' and 'w'
+    const code = e.code || e.key;
+
+    if (!keys[code]) {
+      keysJustDown[code] = true;
+    }
+
+    keys[code] = true;
+
+    // 兼容 e.key 直接访问（你之前就这么做）
+    if (e.key && !keys[e.key]) {
+      keysJustDown[e.key] = true;
+      keys[e.key] = true;
+    }
   });
+
   window.addEventListener('keyup', (e) => {
-    keys[e.code] = false;
-    keys[e.key] = false;
+    const code = e.code || e.key;
+
+    keys[code] = false;
+    keysJustUp[code] = true;
+
+    if (e.key) {
+      keys[e.key] = false;
+      keysJustUp[e.key] = true;
+    }
   });
 
   function beginFrame() {
     pointer.justDown = false;
     pointer.justUp = false;
+
+    for (const k in keysJustDown) {
+      delete keysJustDown[k];
+    }
+    for (const k in keysJustUp) {
+      delete keysJustUp[k];
+    }
   }
 
-  return { pointer, keys, beginFrame };
+  return { pointer, keys, keysJustDown, keysJustUp, beginFrame };
 }

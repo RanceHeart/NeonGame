@@ -69,25 +69,31 @@ export function createScissorBit({ id, owner }) {
 
       // --- Behavior Execution ---
       switch (bit.state) {
-        case 'DEPLOY':
+        case 'DEPLOY': {
           bit.updateDeploy(g);
           break;
-        case 'HUNT':
+        }
+        case 'HUNT': {
           bit.updateHunt(g, isMarute);
           break;
-        case 'CHAOS_CUT':
+        }
+        case 'CHAOS_CUT': {
           bit.updateChaosCut(g, isMarute);
           break;
-        case 'COOLDOWN':
+        }
+        case 'COOLDOWN': {
           bit.updateCooldown(g);
           break;
-        case 'RETURN':
+        }
+        case 'RETURN': {
           bit.updateReturn(g, isMarute);
           break;
+        }
         case 'DOCKED':
-        default:
+        default: {
           bit.updateDocked(g, isMarute);
           break;
+        }
       }
 
       // --- Physics Integration ---
@@ -109,15 +115,21 @@ export function createScissorBit({ id, owner }) {
 
       for (let i = bit.trail.length - 1; i >= 0; i--) {
         bit.trail[i].life -= isMarute ? 0.05 : 0.08;
-        if (bit.trail[i].life <= 0) bit.trail.splice(i, 1);
+        if (bit.trail[i].life <= 0) {
+          bit.trail.splice(i, 1);
+        }
       }
 
       if (bit.state !== 'DOCKED' && bit.state !== 'CHAOS_CUT') {
         if (speed > 1) {
           const target = Math.atan2(bit.vy, bit.vx);
           let diff = target - bit.angle;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) {
+            diff -= Math.PI * 2;
+          }
+          while (diff < -Math.PI) {
+            diff += Math.PI * 2;
+          }
           bit.angle += diff * 0.25;
         }
       }
@@ -128,7 +140,9 @@ export function createScissorBit({ id, owner }) {
       bit.vx *= 0.85;
       bit.vy *= 0.85;
       bit.timer--;
-      if (bit.timer <= 0) bit.state = 'HUNT';
+      if (bit.timer <= 0) {
+        bit.state = 'HUNT';
+      }
     },
 
     updateHunt(g, isMarute) {
@@ -142,19 +156,27 @@ export function createScissorBit({ id, owner }) {
 
       const attackRange = isMarute ? 350 : 180;
       const speed = isMarute ? 2.5 : 1.0;
-      bit.vx += (dx / dist) * speed;
-      bit.vy += (dy / dist) * speed;
+
+      if (dist > 0.0001) {
+        bit.vx += (dx / dist) * speed;
+        bit.vy += (dy / dist) * speed;
+      }
       bit.vx *= 0.92;
       bit.vy *= 0.92;
 
       if (dist < attackRange) {
         bit.state = 'CHAOS_CUT';
+
+        // 常态：切割节奏变慢（不是移动速度）
         bit.dashCount = isMarute ? 12 : 6;
         bit.dashState = 'WAIT';
-        bit.timer = isMarute ? 3 : 5;
+        bit.timer = isMarute ? 3 : 10; // 常态：首次切割前间隔更长
+
         bit.chaosCenter = { x: tx, y: ty };
-        const baseAmp = isMarute ? 300 : 120;
-        bit.chaosAmp = baseAmp + Math.random() * (isMarute ? 200 : 100);
+
+        // 常态：切割距离更大（chaosAmp 更大）
+        const baseAmp = isMarute ? 300 : 240;
+        bit.chaosAmp = baseAmp + Math.random() * (isMarute ? 200 : 160);
       }
     },
 
@@ -162,6 +184,9 @@ export function createScissorBit({ id, owner }) {
       bit.bladeOpen = 1.2;
       bit.chaosCenter.x += (g.input.pointer.x - bit.chaosCenter.x) * 0.1;
       bit.chaosCenter.y += (g.input.pointer.y - bit.chaosCenter.y) * 0.1;
+
+      // ✅ 常态：每刀间隔更长（切割速度更慢）
+      const waitFrames = isMarute ? 1 : 25;
 
       if (bit.dashState === 'WAIT') {
         bit.timer--;
@@ -173,15 +198,20 @@ export function createScissorBit({ id, owner }) {
         if (bit.timer <= 0) {
           bit.pickNextDashPoint();
           bit.dashState = 'MOVING';
+
           const dx = bit.dashTarget.x - bit.x;
           const dy = bit.dashTarget.y - bit.y;
           const dist = Math.hypot(dx, dy);
+
+          // ✅ dashSpeed 不动/接近不动：主要靠 waitFrames 控制“切割频率”
           const dashSpeed = isMarute ? 50 : 22;
-          const frames = Math.ceil(dist / dashSpeed);
+
+          const safeDist = Math.max(0.0001, dist);
+          const frames = Math.ceil(safeDist / dashSpeed);
           bit.timer = Math.max(1, frames);
 
-          bit.vx = (dx / dist) * dashSpeed;
-          bit.vy = (dy / dist) * dashSpeed;
+          bit.vx = (dx / safeDist) * dashSpeed;
+          bit.vy = (dy / safeDist) * dashSpeed;
           bit.angle = Math.atan2(dy, dx);
 
           if (isMarute) {
@@ -200,8 +230,15 @@ export function createScissorBit({ id, owner }) {
       } else if (bit.dashState === 'MOVING') {
         bit.x += bit.vx;
         bit.y += bit.vy;
-        if (g.time.frame % 1 === 0) {
+
+        // ============================================================
+        // ✅ 还原“碰撞检测”：每一帧移动都生成伤害判定体（projectile）
+        // 同时保留线条 slash 粒子（视觉）
+        // ============================================================
+        {
           const color = isMarute ? '#ff003c' : '#00ffaa';
+
+          // 1) 线条粒子（保留）
           g.spawn.particle({
             type: 'slash',
             x1: bit.x - bit.vx * 1.5,
@@ -212,12 +249,30 @@ export function createScissorBit({ id, owner }) {
             thick: isMarute ? 8 : 5,
             life: isMarute ? 0.6 : 0.4,
           });
+
+          // 2) 伤害判定体（还原/保留）
+          // 注意：你原来的 collisions.js 若是识别 type:'scissor_slash'，
+          // 这段会继续触发；字段多给不影响，缺字段才会出问题。
+          g.spawn.projectile({
+            type: 'scissor_slash',
+            from: 'player',
+            x: bit.x,
+            y: bit.y,
+            vx: 0,
+            vy: 0,
+            width: 40,
+            height: 40, // 兼容部分碰撞实现（如果用 AABB）
+            life: 2, // ✅ 还原：极短存活，只为判定（你之前是 2）
+            color,
+          });
         }
+        // ============================================================
 
         bit.timer--;
         if (bit.timer <= 0) {
           bit.x = bit.dashTarget.x;
           bit.y = bit.dashTarget.y;
+
           if (isMarute) {
             g.spawn.particle({
               type: 'explosion',
@@ -229,10 +284,11 @@ export function createScissorBit({ id, owner }) {
             });
             g.camera.addShake(2);
           }
+
           bit.dashCount--;
           if (bit.dashCount > 0) {
             bit.dashState = 'WAIT';
-            bit.timer = isMarute ? 1 : 4;
+            bit.timer = waitFrames; // 常态：每刀之后停顿更久
           } else {
             const isActive =
               g.state.weapon === 'SCISSOR' && g.input.pointer.down;
@@ -265,7 +321,11 @@ export function createScissorBit({ id, owner }) {
 
     pickNextDashPoint() {
       const angle = Math.random() * Math.PI * 2;
-      const r = (0.5 + Math.random() * 0.5) * bit.chaosAmp;
+
+      // 常态：切割距离更大（半径更偏向大值）
+      const ampBias = 0.75;
+      const r = (ampBias + Math.random() * (1 - ampBias)) * bit.chaosAmp;
+
       bit.dashTarget = {
         x: bit.chaosCenter.x + Math.cos(angle) * r,
         y: bit.chaosCenter.y + Math.sin(angle) * r,
@@ -281,8 +341,12 @@ export function createScissorBit({ id, owner }) {
       bit.bladeOpen += (0 - bit.bladeOpen) * 0.15;
 
       let diff = -Math.PI / 2 - bit.angle;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) {
+        diff -= Math.PI * 2;
+      }
+      while (diff < -Math.PI) {
+        diff += Math.PI * 2;
+      }
       bit.angle += diff * 0.2;
 
       if (Math.hypot(tx - bit.x, ty - bit.y) < 20) {
@@ -325,11 +389,12 @@ export function createScissorBit({ id, owner }) {
       const isMarute = g.state.mode === 'MARUTE';
 
       // Don't render hidden bits in normal mode
-      if (isHiddenBit && !isMarute) return;
+      if (isHiddenBit && !isMarute) {
+        return;
+      }
 
       const ctx = g.ctx2d.main;
-      let color = isMarute ? '#ff003c' : '#00ffaa';
-      if (g.state.mode === 'BURST') color = '#00ffff';
+      const color = isMarute ? '#ff003c' : '#00ffaa';
 
       // --- Trail Rendering ---
       if (bit.trail.length > 1) {
@@ -343,8 +408,11 @@ export function createScissorBit({ id, owner }) {
         for (let i = 0; i < bit.trail.length; i++) {
           const p = bit.trail[i];
           ctx.lineWidth = p.width;
-          if (i === 0) ctx.moveTo(p.x, p.y);
-          else ctx.lineTo(p.x, p.y);
+          if (i === 0) {
+            ctx.moveTo(p.x, p.y);
+          } else {
+            ctx.lineTo(p.x, p.y);
+          }
         }
         ctx.globalAlpha = 0.6;
         ctx.stroke();
@@ -362,42 +430,34 @@ export function createScissorBit({ id, owner }) {
 
       // Styling Constants
       const open = bit.bladeOpen; // 0.0 ~ 1.2
-      const armorColor = '#ff9500'; // Harute Orange
-      const innerColor = '#eee'; // White Frame
-      const bladeColor = '#ccc'; // Metal Blade
+      const innerColor = '#eee';
 
       // Create Gradient for Armor
       const grad = ctx.createLinearGradient(-10, 0, 10, 0);
       grad.addColorStop(0, '#ff9500');
       grad.addColorStop(1, '#cc7000');
 
-      // Helper to draw one half of the scissor
-      // dir: 1 (Right), -1 (Left)
       const drawHalf = (dir) => {
         ctx.save();
-        // Pivot rotation
         ctx.rotate(dir * open * 0.4);
 
-        // 1. Main Armor Shell (Orange)
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.moveTo(0, -6);
         ctx.lineTo(dir * 8, -2);
-        ctx.lineTo(dir * 10, 20); // Wide point
-        ctx.lineTo(dir * 2, 50); // Tip
-        ctx.lineTo(0, 45); // Inner tip
+        ctx.lineTo(dir * 10, 20);
+        ctx.lineTo(dir * 2, 50);
+        ctx.lineTo(0, 45);
         ctx.fill();
 
-        // 2. Inner Mechanical Blade (White/Grey)
         ctx.fillStyle = innerColor;
         ctx.beginPath();
         ctx.moveTo(0, -6);
-        ctx.lineTo(0, 45); // Center line
-        ctx.lineTo(dir * -3, 30); // Inner cut
+        ctx.lineTo(0, 45);
+        ctx.lineTo(dir * -3, 30);
         ctx.lineTo(dir * -2, 0);
         ctx.fill();
 
-        // 3. Physical Blade Edge (Shiny)
         if (open > 0.1) {
           ctx.fillStyle = '#fff';
           ctx.beginPath();
@@ -407,7 +467,6 @@ export function createScissorBit({ id, owner }) {
           ctx.fill();
         }
 
-        // 4. GN Condenser / Sensor Strip
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.moveTo(dir * 4, 5);
@@ -416,7 +475,6 @@ export function createScissorBit({ id, owner }) {
         ctx.lineTo(dir * 3, 22);
         ctx.fill();
 
-        // Panel Lines
         ctx.strokeStyle = 'rgba(0,0,0,0.3)';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -427,16 +485,14 @@ export function createScissorBit({ id, owner }) {
         ctx.restore();
       };
 
-      // Draw Right Half
       drawHalf(1);
-      // Draw Left Half
       drawHalf(-1);
 
-      // Central Connection Joint
       ctx.fillStyle = '#333';
       ctx.beginPath();
       ctx.arc(0, -4, 5, 0, Math.PI * 2);
       ctx.fill();
+
       ctx.fillStyle = '#555';
       ctx.beginPath();
       ctx.arc(0, -4, 2, 0, Math.PI * 2);
@@ -445,5 +501,6 @@ export function createScissorBit({ id, owner }) {
       ctx.restore();
     },
   };
+
   return bit;
 }

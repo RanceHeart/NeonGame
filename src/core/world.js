@@ -21,39 +21,40 @@ export function createWorld() {
     particles.spawn(p);
   }
 
-  function update(g) {
-    // 输入 beginFrame：把 justDown/justUp reset
-    g.input.beginFrame();
-
-    // entities
-    for (const e of entities) {
-      if (e.alive !== false && e.update) {
-        e.update(g);
-      }
+  // === 新增：暴露特效接口 ===
+  function spawnHitEffect(x, y, type, color) {
+    if (particles.spawnHitEffect) {
+      particles.spawnHitEffect(x, y, type, color);
     }
+  }
 
-    // systems
+  function update(g) {
+    for (const e of entities) {
+      if (e.alive !== false && e.update) e.update(g);
+    }
     projectiles.update(g);
     particles.update(g);
     collisions.update(g, { entities, projectiles });
 
-    // cleanup（壳子：后面你可以更细）
     for (let i = entities.length - 1; i >= 0; i--) {
-      if (entities[i].alive === false) {
-        entities.splice(i, 1);
-      }
+      if (entities[i].alive === false) entities.splice(i, 1);
     }
   }
 
   function render(g) {
-    // entities
-    for (const e of entities) {
-      if (e.alive !== false && e.render) {
-        e.render(g);
-      }
-    }
+    // 层级排序
+    const getLayer = (e) => {
+      if (e.tags.includes('funnel') || e.tags.includes('scissor_bit')) return 5;
+      if (e.tags.includes('player')) return 10;
+      if (e.tags.includes('boss')) return 2;
+      if (e.tags.includes('enemy')) return 1;
+      return 0;
+    };
+    const sorted = [...entities].sort((a, b) => getLayer(a) - getLayer(b));
 
-    // systems render
+    for (const e of sorted) {
+      if (e.alive !== false && e.render) e.render(g);
+    }
     projectiles.render(g);
     particles.render(g);
   }
@@ -62,6 +63,7 @@ export function createWorld() {
     addEntity,
     spawnProjectile,
     spawnParticle,
+    spawnHitEffect, // 导出
     update,
     render,
     debug: { entities, projectiles, particles },
