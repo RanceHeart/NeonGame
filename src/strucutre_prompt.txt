@@ -1,0 +1,671 @@
+2) 目录结构（壳子）
+src/
+  main.js
+  styles.css
+
+  core/
+    engine.js
+    world.js
+    input.js
+    camera.js
+    events.js
+
+  scenes/
+    sandbox.js
+    bossfight.js
+
+  entities/
+    player/
+      harute.js
+    boss/
+      omega.js
+
+  weapons/
+    rifle.js
+    missiles_vls.js
+    railgun.js
+    funnels.js
+
+  systems/
+    projectiles.js
+    particles.js
+    collisions.js
+
+  ui/
+    hud.js
+
+index.html（Vite 默认就有，建议换成双 Canvas）
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neon Overdrive</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
+
+src/styles.css
+:root { --bg: #050508; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg); overflow: hidden; }
+#app { width: 100%; height: 100%; position: relative; }
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+src/main.js（入口：选场景 + 启动引擎）
+import './styles.css';
+
+import { createEngine } from './core/engine.js';
+import { createSandboxScene } from './scenes/sandbox.js';
+// import { createBossFightScene } from './scenes/bossfight.js';
+
+const app = document.querySelector('#app');
+
+const engine = createEngine({
+  mountEl: app,
+  // 这里切场景：先 sandbox，后面你再换 bossfight
+  scene: createSandboxScene(),
+  // scene: createBossFightScene(),
+});
+
+engine.start();
+
+src/core/engine.js（只做：双 canvas + RAF + resize + 调 scene）
+import { createInput } from './input.js';
+import { createCamera } from './camera.js';
+
+export function createEngine({ mountEl, scene }) {
+  const cvsBg = document.createElement('canvas');
+  const cvsMain = document.createElement('canvas');
+  const bg = cvsBg.getContext('2d', { alpha: false });
+  const main = cvsMain.getContext('2d', { alpha: true });
+
+  mountEl.appendChild(cvsBg);
+  mountEl.appendChild(cvsMain);
+
+  const input = createInput({ targetEl: mountEl });
+  const camera = createCamera();
+
+  const screen = { w: 0, h: 0 };
+  const time = { frame: 0, dt: 0, now: 0, prev: 0 };
+
+  function resize() {
+    const rect = mountEl.getBoundingClientRect();
+    screen.w = Math.max(1, Math.floor(rect.width));
+    screen.h = Math.max(1, Math.floor(rect.height));
+
+    cvsBg.width = screen.w; cvsBg.height = screen.h;
+    cvsMain.width = screen.w; cvsMain.height = screen.h;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const g = {
+    ctx2d: { bg, main },
+    screen,
+    time,
+    input,
+    camera,
+    // 下面这些由 scene.init() 填充（比如 world, hud...）
+    state: {},
+  };
+
+  let running = false;
+
+  function tick(ts) {
+    if (!running) {
+      return;
+    }
+
+    if (!time.prev) {
+      time.prev = ts;
+    }
+    time.now = ts;
+    time.dt = Math.min(0.05, (ts - time.prev) / 1000);
+    time.prev = ts;
+
+    // 清屏（壳子：你可以换成你的背景系统）
+    bg.fillStyle = '#050508';
+    bg.fillRect(0, 0, screen.w, screen.h);
+    main.clearRect(0, 0, screen.w, screen.h);
+
+    // camera 开始（壳子：只做 shake 的 transform）
+    camera.beginFrame(g);
+
+    // 更新/渲染场景
+    scene.update(g);
+    scene.render(g);
+
+    // camera 结束
+    camera.endFrame(g);
+
+    time.frame += 1;
+    requestAnimationFrame(tick);
+  }
+
+  return {
+    start() {
+      if (running) {
+        return;
+      }
+      running = true;
+      scene.init(g);
+      requestAnimationFrame(tick);
+    },
+    stop() {
+      running = false;
+    },
+    setScene(nextScene) {
+      // 壳子：不做销毁，后面你可以扩展 scene.dispose()
+      scene = nextScene;
+      scene.init(g);
+    },
+  };
+}
+
+src/core/input.js（统一输入）
+export function createInput({ targetEl }) {
+  const pointer = { x: 0, y: 0, down: false, justDown: false, justUp: false };
+
+  const toLocal = (clientX, clientY) => {
+    const r = targetEl.getBoundingClientRect();
+    return { x: clientX - r.left, y: clientY - r.top };
+  };
+
+  const onDown = (x, y) => {
+    const p = toLocal(x, y);
+    pointer.x = p.x; pointer.y = p.y;
+    pointer.down = true;
+    pointer.justDown = true;
+  };
+
+  const onMove = (x, y) => {
+    const p = toLocal(x, y);
+    pointer.x = p.x; pointer.y = p.y;
+  };
+
+  const onUp = () => {
+    pointer.down = false;
+    pointer.justUp = true;
+  };
+
+  targetEl.addEventListener('mousedown', (e) => onDown(e.clientX, e.clientY));
+  window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+  window.addEventListener('mouseup', onUp);
+
+  targetEl.addEventListener(
+    'touchstart',
+    (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      onDown(t.clientX, t.clientY);
+    },
+    { passive: false }
+  );
+  targetEl.addEventListener(
+    'touchmove',
+    (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      onMove(t.clientX, t.clientY);
+    },
+    { passive: false }
+  );
+  targetEl.addEventListener(
+    'touchend',
+    (e) => {
+      e.preventDefault();
+      onUp();
+    },
+    { passive: false }
+  );
+
+  function beginFrame() {
+    pointer.justDown = false;
+    pointer.justUp = false;
+  }
+
+  return { pointer, beginFrame };
+}
+
+src/core/camera.js（壳子：只留 shake）
+export function createCamera() {
+  const cam = {
+    shake: 0,
+    shakeX: 0,
+    shakeY: 0,
+    addShake(v) {
+      cam.shake = Math.max(cam.shake, v);
+    },
+    beginFrame(g) {
+      // TODO: 更精细的 camera（zoom/kick）
+      cam.shakeX = (Math.random() - 0.5) * cam.shake;
+      cam.shakeY = (Math.random() - 0.5) * cam.shake;
+      cam.shake *= 0.9;
+
+      g.ctx2d.main.save();
+      g.ctx2d.main.translate(cam.shakeX, cam.shakeY);
+    },
+    endFrame(g) {
+      g.ctx2d.main.restore();
+    },
+  };
+
+  return cam;
+}
+
+src/core/events.js（事件总线，给模块解耦用）
+export function createEvents() {
+  const map = new Map(); // type -> Set<fn>
+
+  function on(type, fn) {
+    let set = map.get(type);
+    if (!set) {
+      set = new Set();
+      map.set(type, set);
+    }
+    set.add(fn);
+    return () => set.delete(fn);
+  }
+
+  function emit(type, payload) {
+    const set = map.get(type);
+    if (!set) {
+      return;
+    }
+    set.forEach((fn) => fn(payload));
+  }
+
+  return { on, emit };
+}
+
+src/core/world.js（世界：实体 + 系统管线）
+import { createProjectileSystem } from '../systems/projectiles.js';
+import { createParticleSystem } from '../systems/particles.js';
+import { createCollisionSystem } from '../systems/collisions.js';
+
+export function createWorld() {
+  const entities = [];
+  const projectiles = createProjectileSystem();
+  const particles = createParticleSystem();
+  const collisions = createCollisionSystem();
+
+  function addEntity(e) {
+    entities.push(e);
+    return e;
+  }
+
+  function spawnProjectile(p) {
+    projectiles.spawn(p);
+  }
+
+  function spawnParticle(p) {
+    particles.spawn(p);
+  }
+
+  function update(g) {
+    // 输入 beginFrame：把 justDown/justUp reset
+    g.input.beginFrame();
+
+    // entities
+    for (const e of entities) {
+      if (e.alive !== false && e.update) {
+        e.update(g);
+      }
+    }
+
+    // systems
+    projectiles.update(g);
+    particles.update(g);
+    collisions.update(g, { entities, projectiles });
+
+    // cleanup（壳子：后面你可以更细）
+    for (let i = entities.length - 1; i >= 0; i--) {
+      if (entities[i].alive === false) {
+        entities.splice(i, 1);
+      }
+    }
+  }
+
+  function render(g) {
+    // entities
+    for (const e of entities) {
+      if (e.alive !== false && e.render) {
+        e.render(g);
+      }
+    }
+
+    // systems render
+    projectiles.render(g);
+    particles.render(g);
+  }
+
+  return {
+    addEntity,
+    spawnProjectile,
+    spawnParticle,
+    update,
+    render,
+    debug: { entities, projectiles, particles },
+  };
+}
+
+src/scenes/sandbox.js（只放 player，敌人先不放）
+import { createWorld } from '../core/world.js';
+import { createHarutePlayer } from '../entities/player/harute.js';
+
+export function createSandboxScene() {
+  let world;
+
+  return {
+    init(g) {
+      world = createWorld();
+
+      // 让实体/武器只通过 g.spawn 访问系统
+      g.spawn = {
+        projectile: (p) => world.spawnProjectile(p),
+        particle: (p) => world.spawnParticle(p),
+      };
+
+      // TODO: UI/HUD 也可以挂在 g.ui
+      g.state = { mode: 'NORMAL', weapon: 'RIFLE' };
+
+      world.addEntity(createHarutePlayer());
+    },
+    update(g) {
+      world.update(g);
+    },
+    render(g) {
+      world.render(g);
+
+      // 壳子：画个调试文本，证明运行正常
+      const ctx = g.ctx2d.main;
+      ctx.fillStyle = '#0ff';
+      ctx.font = '12px monospace';
+      ctx.fillText('SANDBOX (player only) - TODO: implement weapons/render', 12, 20);
+    },
+  };
+}
+
+src/scenes/bossfight.js（留壳子：player + boss）
+import { createWorld } from '../core/world.js';
+import { createHarutePlayer } from '../entities/player/harute.js';
+import { createOmegaBoss } from '../entities/boss/omega.js';
+
+export function createBossFightScene() {
+  let world;
+
+  return {
+    init(g) {
+      world = createWorld();
+      g.spawn = {
+        projectile: (p) => world.spawnProjectile(p),
+        particle: (p) => world.spawnParticle(p),
+      };
+      g.state = { bossPhase: 1 };
+
+      world.addEntity(createHarutePlayer());
+      world.addEntity(createOmegaBoss());
+    },
+    update(g) {
+      world.update(g);
+    },
+    render(g) {
+      world.render(g);
+    },
+  };
+}
+
+src/entities/player/harute.js（player 壳子）
+import { createRifleWeapon } from '../../weapons/rifle.js';
+// 你后面让 Gemini 生成更多武器
+// import { createVlsMissiles } from '../../weapons/missiles_vls.js';
+
+export function createHarutePlayer() {
+  const weapons = {
+    RIFLE: createRifleWeapon(),
+    // MISSILES: createVlsMissiles(),
+  };
+
+  const player = {
+    id: 'player.harute',
+    tags: ['player'],
+    alive: true,
+
+    x: 0,
+    y: 0,
+
+    update(g) {
+      // TODO: 读 g.input，移动/变形/能量
+      if (!player.x) {
+        player.x = g.screen.w / 2;
+        player.y = g.screen.h - 160;
+      }
+
+      // TODO: 选武器
+      const w = weapons[g.state.weapon] || weapons.RIFLE;
+      w.update(g, player);
+    },
+
+    render(g) {
+      // TODO: 用你 player1.html 的绘制逻辑替换
+      const ctx = g.ctx2d.main;
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.moveTo(0, -20);
+      ctx.lineTo(14, 14);
+      ctx.lineTo(0, 6);
+      ctx.lineTo(-14, 14);
+      ctx.fill();
+      ctx.restore();
+    },
+
+    getHitShape() {
+      // TODO: 给 collision 用
+      return { type: 'circle', x: player.x, y: player.y, r: 12 };
+    },
+  };
+
+  return player;
+}
+
+src/entities/boss/omega.js（boss 壳子）
+export function createOmegaBoss() {
+  const boss = {
+    id: 'boss.omega',
+    tags: ['boss'],
+    alive: true,
+    x: 0,
+    y: 0,
+
+    update(g) {
+      // TODO: phase 行为/弹幕/入场
+      if (!boss.x) {
+        boss.x = g.screen.w / 2;
+        boss.y = 180;
+      }
+    },
+
+    render(g) {
+      // TODO: 用你 boss1.html 的 Boss.draw 分层逻辑替换
+      const ctx = g.ctx2d.main;
+      ctx.save();
+      ctx.translate(boss.x, boss.y);
+      ctx.fillStyle = '#ff003c';
+      ctx.fillRect(-120, -40, 240, 80);
+      ctx.restore();
+    },
+
+    getHitShape() {
+      return { type: 'aabb', x: boss.x, y: boss.y, w: 240, h: 80 };
+    },
+  };
+
+  return boss;
+}
+
+src/weapons/rifle.js（武器壳子：只展示接口）
+export function createRifleWeapon() {
+  let cooldown = 0;
+
+  return {
+    name: 'RIFLE',
+    update(g, owner) {
+      // TODO: 根据 g.input.pointer.down 触发
+      if (cooldown > 0) {
+        cooldown -= 1;
+        return;
+      }
+
+      // 壳子：点按/按住就发射一个“projectile”
+      if (g.input.pointer.down) {
+        cooldown = 6;
+
+        // 注意：模块永远只用 g.spawn，不要直接 push 数组
+        g.spawn.projectile({
+          type: 'bullet',
+          from: 'player',
+          x: owner.x,
+          y: owner.y - 30,
+          vx: 0,
+          vy: -16,
+          life: 120,
+          color: '#0ff',
+        });
+
+        g.camera.addShake(2);
+      }
+    },
+  };
+}
+
+src/weapons/missiles_vls.js / railgun.js / funnels.js（空壳）
+export function createVlsMissiles() {
+  return {
+    name: 'MISSILES_VLS',
+    update(g, owner) {
+      // TODO: Itano Circus / VLS cell cycle
+    },
+  };
+}
+
+export function createRailgun() {
+  return {
+    name: 'RAILGUN',
+    update(g, owner) {
+      // TODO: 定时充能 + 磁轨炮光束 + 屏幕拉伸感
+    },
+  };
+}
+
+export function createFunnels() {
+  return {
+    name: 'FUNNELS',
+    update(g, owner) {
+      // TODO: funnel AI/编队/锁定目标/beam
+    },
+  };
+}
+
+src/systems/projectiles.js（子弹系统壳子）
+export function createProjectileSystem() {
+  const list = [];
+
+  function spawn(p) {
+    list.push({ ...p });
+  }
+
+  function update(g) {
+    for (const p of list) {
+      // TODO: 更复杂类型（missile/beam）
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 1;
+      if (p.life <= 0) {
+        p.dead = true;
+      }
+    }
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].dead) {
+        list.splice(i, 1);
+      }
+    }
+  }
+
+  function render(g) {
+    const ctx = g.ctx2d.main;
+    for (const p of list) {
+      ctx.fillStyle = p.color || '#fff';
+      ctx.fillRect(p.x - 2, p.y - 6, 4, 12);
+    }
+  }
+
+  return { spawn, update, render, list };
+}
+
+src/systems/particles.js（粒子系统壳子）
+export function createParticleSystem() {
+  const list = [];
+
+  function spawn(p) {
+    list.push({ life: 1, ...p });
+  }
+
+  function update(g) {
+    for (const p of list) {
+      // TODO: 更丰富的粒子类型（smoke/spark/beamTrail）
+      p.x += p.vx || 0;
+      p.y += p.vy || 0;
+      p.life -= p.decay || 0.03;
+      if (p.life <= 0) {
+        p.dead = true;
+      }
+    }
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].dead) {
+        list.splice(i, 1);
+      }
+    }
+  }
+
+  function render(g) {
+    const ctx = g.ctx2d.main;
+    for (const p of list) {
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.color || '#fff';
+      ctx.fillRect(p.x, p.y, p.size || 2, p.size || 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  return { spawn, update, render, list };
+}
+
+src/systems/collisions.js（碰撞壳子：先不实现）
+export function createCollisionSystem() {
+  return {
+    update(g, { entities, projectiles }) {
+      // TODO: player projectile -> boss hit
+      // TODO: boss projectile -> player hit
+    },
+  };
+}
+
+src/ui/hud.js（UI 壳子）
+export function createHud() {
+  return {
+    mount(g) {
+      // TODO: 创建 DOM/按钮，把行为写成 emit
+    },
+    unmount() {
+      // TODO
+    },
+    update(g) {
+      // TODO
+    },
+  };
+}
