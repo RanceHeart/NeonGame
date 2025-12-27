@@ -3,6 +3,7 @@ import { createRifleWeapon } from '../../weapons/rifle.js';
 import { createVlsMissiles } from '../../weapons/missiles_vls.js';
 import { createFunnelsWeapon } from '../../weapons/funnels.js';
 import { createScissorWeapon } from '../../weapons/scissor.js';
+import { createRailgunWeapon } from '../../weapons/railgun.js';
 
 export function createHarutePlayer() {
   const weapons = {
@@ -10,6 +11,7 @@ export function createHarutePlayer() {
     MISSILE: createVlsMissiles(),
     FUNNEL: createFunnelsWeapon(),
     SCISSOR: createScissorWeapon(),
+    CANNON: createRailgunWeapon(),
   };
 
   const player = {
@@ -25,19 +27,15 @@ export function createHarutePlayer() {
     transformFactor: 0,
     vlsIndex: 0,
 
-    // funnels bits 可以作为“子实体”独立加到 world（更符合架构）
-    // 这里先留一个引用给 funnels/scissor weapon 用（scene init 时注入）
     funnelBits: [],
+    scissorBits: [],
 
     update(g) {
-      // 定位：固定中下（跟原 HTML）
       player.x = g.screen.w / 2;
       player.y =
         g.screen.h - 180 + Math.sin(g.time.frame * 0.04) * 10 + player.recoilY;
-
       player.recoilY *= 0.9;
 
-      // mode tween（不引 gsap：用阻尼逼近）
       const targetTf = g.state.mode === 'MARUTE' ? 1 : 0;
       player.transformFactor += (targetTf - player.transformFactor) * 0.08;
 
@@ -45,6 +43,7 @@ export function createHarutePlayer() {
         g.state.weapon === 'MISSILE' && g.input.pointer.down ? 1 : 0;
       player.missileOpen += (targetMissileOpen - player.missileOpen) * 0.2;
 
+      // 武器逻辑更新
       const w = weapons[g.state.weapon] || weapons.RIFLE;
       w.update(g, player);
     },
@@ -58,7 +57,7 @@ export function createHarutePlayer() {
       const spread = tf * 25;
       const noseSplit = tf * 15;
 
-      // main thruster flame
+      // 1. 尾焰
       ctx.save();
       ctx.translate(0, 80);
       ctx.fillStyle = g.state.mode === 'MARUTE' ? '#f0f' : '#0ff';
@@ -74,13 +73,45 @@ export function createHarutePlayer() {
       ctx.shadowBlur = 0;
       ctx.restore();
 
-      // side binders (VLS units)
+      // 2. *** GN Rifle (枪) ***
+      // 位于机体连接处下方，显眼的长管
+      const rifleColor = '#444';
+      [-1, 1].forEach((side) => {
+        ctx.save();
+        ctx.translate(side * (22 + spread), -10); // 根据 spread 移动
+
+        // 枪管
+        ctx.fillStyle = rifleColor;
+        ctx.fillRect(-4, -60, 8, 80); // 长长的枪管
+
+        // 瞄准镜/传感器
+        ctx.fillStyle = g.state.mode === 'MARUTE' ? '#ff003c' : '#00ffaa';
+        ctx.fillRect(-1, -65, 2, 5);
+
+        // 枪口发光 (开火时)
+        if (
+          g.state.weapon === 'RIFLE' &&
+          g.input.pointer.down &&
+          g.time.frame % 5 < 2
+        ) {
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = ctx.fillStyle;
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(0, -60, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        ctx.restore();
+      });
+
+      // 3. Side Binders (侧面推进器/导弹舱)
       [-1, 1].forEach((side) => {
         ctx.save();
         ctx.scale(side, 1);
         ctx.translate(45 + spread, 0);
 
-        // binder body
         ctx.fillStyle = '#222';
         ctx.strokeStyle = '#444';
         ctx.beginPath();
@@ -92,18 +123,14 @@ export function createHarutePlayer() {
         ctx.fill();
         ctx.stroke();
 
-        // vls cells
+        // Missile Hatch
         const startX = -14;
         const startY = -50;
-        const cellW = 8;
-        const cellH = 10;
-
         for (let r = 0; r < 8; r++) {
           for (let c = 0; c < 2; c++) {
-            const cx = startX + c * (cellW + 2);
-            const cy = startY + r * (cellH + 2);
+            const cx = startX + c * 10;
+            const cy = startY + r * 12;
             const globalIdx = (side === -1 ? 0 : 16) + (r * 2 + c);
-
             const justFired =
               Math.abs(player.vlsIndex - globalIdx) < 4 &&
               g.input.pointer.down &&
@@ -111,22 +138,16 @@ export function createHarutePlayer() {
 
             if (justFired) {
               ctx.fillStyle = '#ffaa00';
-              ctx.shadowBlur = 10;
-              ctx.shadowColor = '#ffaa00';
             } else if (player.missileOpen > 0.5) {
               ctx.fillStyle = g.state.mode === 'MARUTE' ? '#511' : '#333';
-              ctx.shadowBlur = 0;
             } else {
               ctx.fillStyle = '#111';
-              ctx.shadowBlur = 0;
             }
-
-            ctx.fillRect(cx, cy, cellW, cellH);
-            ctx.shadowBlur = 0;
+            ctx.fillRect(cx, cy, 8, 10);
           }
         }
 
-        // GN condenser
+        // GN Condenser (Green/Red Strip)
         ctx.fillStyle = g.state.mode === 'MARUTE' ? '#ff003c' : '#00ffaa';
         ctx.shadowBlur = 10;
         ctx.shadowColor = ctx.fillStyle;
@@ -136,7 +157,7 @@ export function createHarutePlayer() {
         ctx.restore();
       });
 
-      // main body
+      // 4. 机身主体
       ctx.fillStyle = '#eee';
       ctx.beginPath();
       ctx.moveTo(0, -50);
@@ -145,7 +166,8 @@ export function createHarutePlayer() {
       ctx.lineTo(-30, 20);
       ctx.fill();
 
-      // nose split mechanism
+      // 5. 机头分裂
+      // Left
       ctx.save();
       ctx.translate(-noseSplit, -30);
       ctx.fillStyle = '#fff';
@@ -159,6 +181,7 @@ export function createHarutePlayer() {
       ctx.fillRect(-8, -60, 4, 20);
       ctx.restore();
 
+      // Right
       ctx.save();
       ctx.translate(noseSplit, -30);
       ctx.fillStyle = '#fff';
@@ -172,7 +195,7 @@ export function createHarutePlayer() {
       ctx.fillRect(4, -60, 4, 20);
       ctx.restore();
 
-      // marute face
+      // 6. Marute Face
       if (tf > 0.1) {
         ctx.fillStyle = '#222';
         ctx.fillRect(-5, -100, 10, 60);
@@ -188,7 +211,7 @@ export function createHarutePlayer() {
         ctx.globalAlpha = 1;
       }
 
-      // cockpit
+      // 7. 驾驶舱
       ctx.fillStyle = '#111';
       ctx.beginPath();
       ctx.moveTo(0, -40);

@@ -3,6 +3,7 @@ import { createWorld } from '../core/world.js';
 import { createHarutePlayer } from '../entities/player/harute.js';
 import { createHud } from '../ui/hud.js';
 import { createFunnelBit } from '../entities/player/funnel_bit.js';
+import { createScissorBit } from '../entities/player/scissor_bit.js'; // 引入新文件
 
 export function createSandboxScene() {
   let world;
@@ -13,10 +14,7 @@ export function createSandboxScene() {
       world = createWorld();
       hud = createHud();
 
-      // 把 mountEl 透给 HUD 用（engine 那边也可以直接塞到 g 上）
       if (!g.mountEl) {
-        // 你在 engine.createEngine 里最好直接 g.mountEl = mountEl
-        // 这里兜底：通过 canvas 的 parent 找
         g.mountEl = g.ctx2d.main.canvas.parentElement;
       }
 
@@ -35,10 +33,21 @@ export function createSandboxScene() {
       const player = createHarutePlayer();
       world.addEntity(player);
 
+      // 初始化数组
       player.funnelBits = [];
-      for (let i = 0; i < 12; i++) {
+      player.scissorBits = [];
+
+      // 1. 生成 Funnel Bits (负责射击) - 6个
+      for (let i = 0; i < 6; i++) {
         const bit = createFunnelBit({ id: i, owner: player });
         player.funnelBits.push(bit);
+        world.addEntity(bit);
+      }
+
+      // 2. 生成 Scissor Bits (负责近战) - 6个
+      for (let i = 0; i < 6; i++) {
+        const bit = createScissorBit({ id: i, owner: player });
+        player.scissorBits.push(bit);
         world.addEntity(bit);
       }
     },
@@ -54,7 +63,7 @@ export function createSandboxScene() {
       const ctx = g.ctx2d.main;
       ctx.fillStyle = '#0ff';
       ctx.font = '12px monospace';
-      ctx.fillText('SANDBOX - HARUTE (HUD + weapons + systems wired)', 12, 20);
+      ctx.fillText('SANDBOX - SCISSOR & FUNNEL SEPARATED', 12, 20);
     },
   };
 }

@@ -70,6 +70,7 @@ export function createHud() {
             <button id="w-scissor">SCISSOR</button>
             <button id="w-missile">MISSILE</button>
             <button id="w-funnel">FUNNEL</button>
+            <button id="w-cannon">CANNON</button>
           </div>
         </div>
       </div>
@@ -91,6 +92,7 @@ export function createHud() {
     weaponBtns.set('SCISSOR', rootEl.querySelector('#w-scissor'));
     weaponBtns.set('MISSILE', rootEl.querySelector('#w-missile'));
     weaponBtns.set('FUNNEL', rootEl.querySelector('#w-funnel'));
+    weaponBtns.set('CANNON', rootEl.querySelector('#w-cannon'));
 
     // 4) click handlers（只改 state + emit）
     btnNormal.addEventListener('click', () => {
