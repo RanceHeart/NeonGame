@@ -1,5 +1,7 @@
+// src/core/input.js
 export function createInput({ targetEl }) {
   const pointer = { x: 0, y: 0, down: false, justDown: false, justUp: false };
+  const keys = {}; // Store keyboard state
 
   const toLocal = (clientX, clientY) => {
     const r = targetEl.getBoundingClientRect();
@@ -25,6 +27,7 @@ export function createInput({ targetEl }) {
     pointer.justUp = true;
   };
 
+  // Pointer Events
   targetEl.addEventListener('mousedown', (e) => onDown(e.clientX, e.clientY));
   window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
   window.addEventListener('mouseup', onUp);
@@ -32,7 +35,7 @@ export function createInput({ targetEl }) {
   targetEl.addEventListener(
     'touchstart',
     (e) => {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       const t = e.touches[0];
       onDown(t.clientX, t.clientY);
     },
@@ -41,7 +44,7 @@ export function createInput({ targetEl }) {
   targetEl.addEventListener(
     'touchmove',
     (e) => {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       const t = e.touches[0];
       onMove(t.clientX, t.clientY);
     },
@@ -50,16 +53,26 @@ export function createInput({ targetEl }) {
   targetEl.addEventListener(
     'touchend',
     (e) => {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       onUp();
     },
     { passive: false },
   );
+
+  // --- Keyboard Support Added ---
+  window.addEventListener('keydown', (e) => {
+    keys[e.code] = true;
+    keys[e.key] = true; // Support both 'KeyW' and 'w'
+  });
+  window.addEventListener('keyup', (e) => {
+    keys[e.code] = false;
+    keys[e.key] = false;
+  });
 
   function beginFrame() {
     pointer.justDown = false;
     pointer.justUp = false;
   }
 
-  return { pointer, beginFrame };
+  return { pointer, keys, beginFrame };
 }

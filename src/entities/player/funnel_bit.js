@@ -83,19 +83,9 @@ export function createFunnelBit({ id, owner }) {
       const side = bit.x > owner.x ? 1 : -1;
       const ejectSpeed = isMarute ? 8 : 5;
 
+      // Eject sideways out of the binder
       bit.vx = side * (ejectSpeed + Math.random() * 2);
-      bit.vy = -2 - Math.random() * 3;
-
-      // ✅ 删除：离开时的白色烟雾（用户要求去掉）
-      // g.spawn.particle({
-      //   type: 'gn_smoke',
-      //   x: bit.x,
-      //   y: bit.y,
-      //   vx: -bit.vx * 0.5,
-      //   vy: 2,
-      //   color: '#fff',
-      //   size: 4,
-      // });
+      bit.vy = 1 + Math.random() * 2; // Drop slightly down
     },
 
     updateEject(g) {
@@ -150,12 +140,18 @@ export function createFunnelBit({ id, owner }) {
     },
 
     getDockingPosition() {
+      // Logic Update: Stack inside the inner rear of the binder
       const side = bit.bitId % 2 === 0 ? -1 : 1;
-      const idx = Math.floor(bit.bitId / 2);
+      const idx = Math.floor(bit.bitId / 2); // 0..6
       const spread = owner.transformFactor * 25;
 
-      const tx = owner.x + side * (50 + spread);
-      const ty = owner.y - 50 + idx * 10;
+      // Binder Inner edge approx x=35.
+      // We want them to form a vertical rack.
+      const rackX = 35 + spread;
+      const rackY = 15 + idx * 5; // Tightly stacked
+
+      const tx = owner.x + side * rackX;
+      const ty = owner.y + rackY;
 
       return { tx, ty };
     },
@@ -168,7 +164,7 @@ export function createFunnelBit({ id, owner }) {
       bit.x += dx * 0.1;
       bit.y += dy * 0.1;
 
-      const targetScale = isMarute ? 0.8 : 0.55;
+      const targetScale = isMarute ? 0.8 : 0.6; // Smaller when docked to fit rack
       bit.scaleFactor += (targetScale - bit.scaleFactor) * 0.1;
 
       let diff = -Math.PI / 2 - bit.angle;
@@ -199,12 +195,11 @@ export function createFunnelBit({ id, owner }) {
       bit.vy = 0;
       bit.angle = -Math.PI / 2;
 
-      const targetScale = isMarute ? 0.8 : 0.55;
+      const targetScale = isMarute ? 0.8 : 0.6;
       bit.scaleFactor += (targetScale - bit.scaleFactor) * 0.1;
 
       if (isMarute) {
-        bit.x += (Math.random() - 0.5) * 3;
-        bit.y += (Math.random() - 0.5) * 3;
+        bit.x += (Math.random() - 0.5) * 2;
       }
     },
 
@@ -249,32 +244,20 @@ export function createFunnelBit({ id, owner }) {
       const isMarute = g.state.mode === 'MARUTE';
       const color = isMarute ? '#ff003c' : '#00ffaa';
 
-      // 主体
-      ctx.fillStyle = '#333';
-      ctx.beginPath();
-      ctx.moveTo(0, -10);
-      ctx.lineTo(-4, 5);
-      ctx.lineTo(0, 8);
-      ctx.lineTo(4, 5);
-      ctx.fill();
+      // Design Update: Blockier "Container" look
 
-      // 传感器发光
+      // Main block
+      ctx.fillStyle = '#444';
+      ctx.fillRect(-3, -6, 6, 12);
+
+      // Sensor Eye
       ctx.fillStyle = color;
-      ctx.fillRect(-1, -5, 2, 4);
+      ctx.fillRect(-1, -2, 2, 4);
 
-      // 侧翼
-      ctx.fillStyle = '#555';
-      ctx.beginPath();
-      ctx.moveTo(-4, 0);
-      ctx.lineTo(-8, 6);
-      ctx.lineTo(-4, 8);
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.moveTo(4, 0);
-      ctx.lineTo(8, 6);
-      ctx.lineTo(4, 8);
-      ctx.fill();
+      // Detail Lines
+      ctx.fillStyle = '#666';
+      ctx.fillRect(-3, -6, 1, 12);
+      ctx.fillRect(2, -6, 1, 12);
 
       ctx.restore();
     },

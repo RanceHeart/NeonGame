@@ -7,28 +7,42 @@ export function createHud() {
 
   let btnNormal = null;
   let btnMarute = null;
+  let btnBurst = null; // New
+
+  let btnZoomIn = null;
+  let btnZoomOut = null;
+
   const weaponBtns = new Map();
 
   function setModeUI(mode) {
-    if (stModeEl) {
-      stModeEl.textContent = mode;
-    }
+    if (stModeEl) stModeEl.textContent = mode;
 
     if (stGnEl) {
-      if (mode === 'MARUTE') {
+      if (mode === 'BURST') {
+        stGnEl.textContent = 'MAX OUTPUT';
+        stGnEl.classList.add('alert');
+        stGnEl.style.color = '#fff';
+        stGnEl.style.textShadow = '0 0 10px #fff, 0 0 20px #0ff';
+        document.body.style.boxShadow = 'inset 0 0 50px rgba(0,255,255,0.3)';
+      } else if (mode === 'MARUTE') {
         stGnEl.textContent = 'TRANS-AM';
         stGnEl.classList.add('alert');
+        stGnEl.style.color = '';
+        stGnEl.style.textShadow = '';
         document.body.style.boxShadow = 'inset 0 0 100px rgba(255,0,50,0.2)';
       } else {
         stGnEl.textContent = '100%';
         stGnEl.classList.remove('alert');
+        stGnEl.style.color = '';
+        stGnEl.style.textShadow = '';
         document.body.style.boxShadow = 'none';
       }
     }
 
-    if (btnNormal && btnMarute) {
-      btnNormal.classList.toggle('m-active', mode === 'NORMAL');
-      btnMarute.classList.toggle('m-marute', mode === 'MARUTE');
+    if (btnNormal && btnMarute && btnBurst) {
+      btnNormal.className = mode === 'NORMAL' ? 'm-active' : '';
+      btnMarute.className = mode === 'MARUTE' ? 'm-marute' : '';
+      btnBurst.className = mode === 'BURST' ? 'm-burst' : '';
     }
   }
 
@@ -39,7 +53,6 @@ export function createHud() {
   }
 
   function mount(g) {
-    // 1) root overlay
     rootEl = document.createElement('div');
     rootEl.id = 'ui-layer';
     rootEl.innerHTML = `
@@ -58,15 +71,24 @@ export function createHud() {
         <div class="panel">
           <div class="panel-title">SYSTEM MODE</div>
           <div class="btn-group">
-            <button id="btn-normal" class="m-active">CRUISE</button>
+            <button id="btn-normal">CRUISE</button>
             <button id="btn-marute">MARUTE</button>
+            <button id="btn-burst">BURST</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">VIEW OPTICS</div>
+          <div class="btn-group">
+            <button id="btn-z-out" style="width:30px">-</button>
+            <button id="btn-z-in" style="width:30px">+</button>
           </div>
         </div>
 
         <div class="panel">
           <div class="panel-title">WEAPON SELECT</div>
           <div class="btn-group">
-            <button id="w-rifle" class="active">RIFLE</button>
+            <button id="w-rifle">RIFLE</button>
             <button id="w-scissor">SCISSOR</button>
             <button id="w-missile">MISSILE</button>
             <button id="w-funnel">FUNNEL</button>
@@ -74,19 +96,35 @@ export function createHud() {
           </div>
         </div>
       </div>
+      
+      <style>
+        /* Extra styles for new button */
+        button.m-burst {
+          background: #0ff;
+          color: #000;
+          box-shadow: 0 0 25px #0ff;
+          border-color: #fff;
+          animation: pulse-fast 0.2s infinite;
+        }
+        @keyframes pulse-fast {
+          50% { opacity: 0.8; }
+        }
+      </style>
     `;
 
-    // 2) target reticle
     targetEl = document.createElement('div');
     targetEl.id = 'target';
     g.mountEl.appendChild(targetEl);
 
-    // 3) wire refs
     stModeEl = rootEl.querySelector('#st-mode');
     stGnEl = rootEl.querySelector('#st-gn');
 
     btnNormal = rootEl.querySelector('#btn-normal');
     btnMarute = rootEl.querySelector('#btn-marute');
+    btnBurst = rootEl.querySelector('#btn-burst');
+
+    btnZoomIn = rootEl.querySelector('#btn-z-in');
+    btnZoomOut = rootEl.querySelector('#btn-z-out');
 
     weaponBtns.set('RIFLE', rootEl.querySelector('#w-rifle'));
     weaponBtns.set('SCISSOR', rootEl.querySelector('#w-scissor'));
@@ -94,17 +132,23 @@ export function createHud() {
     weaponBtns.set('FUNNEL', rootEl.querySelector('#w-funnel'));
     weaponBtns.set('CANNON', rootEl.querySelector('#w-cannon'));
 
-    // 4) click handlers（只改 state + emit）
-    btnNormal.addEventListener('click', () => {
-      g.state.mode = 'NORMAL';
-      setModeUI('NORMAL');
-      g.events.emit('mode/change', { mode: 'NORMAL' });
-    });
+    // Mode Handlers
+    const setMode = (m) => {
+      g.state.mode = m;
+      setModeUI(m);
+      g.events.emit('mode/change', { mode: m });
+    };
 
-    btnMarute.addEventListener('click', () => {
-      g.state.mode = 'MARUTE';
-      setModeUI('MARUTE');
-      g.events.emit('mode/change', { mode: 'MARUTE' });
+    btnNormal.addEventListener('click', () => setMode('NORMAL'));
+    btnMarute.addEventListener('click', () => setMode('MARUTE'));
+    btnBurst.addEventListener('click', () => setMode('BURST'));
+
+    // Zoom Handlers
+    btnZoomIn.addEventListener('click', () => {
+      g.camera.setZoom(g.camera.targetZoom + 0.25);
+    });
+    btnZoomOut.addEventListener('click', () => {
+      g.camera.setZoom(g.camera.targetZoom - 0.25);
     });
 
     for (const [weapon, el] of weaponBtns.entries()) {
@@ -115,10 +159,8 @@ export function createHud() {
       });
     }
 
-    // 5) mount to DOM
     g.mountEl.appendChild(rootEl);
 
-    // init UI from state
     setModeUI(g.state.mode || 'NORMAL');
     setWeaponUI(g.state.weapon || 'RIFLE');
   }
@@ -135,8 +177,9 @@ export function createHud() {
   }
 
   function update(g) {
-    // reticle follow pointer（不改你的 input，只用它）
     if (targetEl) {
+      // Reticle positions need to account for Zoom if we wanted to be perfect,
+      // but DOM overlay is screen-space, so pointer is fine.
       targetEl.style.left = `${g.input.pointer.x}px`;
       targetEl.style.top = `${g.input.pointer.y}px`;
       targetEl.classList.toggle('t-lock', g.input.pointer.down);

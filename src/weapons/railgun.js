@@ -99,7 +99,7 @@ export function createRailgunWeapon() {
         charge -= DRAIN_RATE;
 
         // 动态后坐力与震动 (随能量减弱)
-        owner.recoilY += (isMarute ? 3 : 2) * powerScale;
+        owner.recoilY += (isMarute ? 0.2 : 0.15) * powerScale * powerScale;
         g.camera.addShake((isMarute ? 5 : 3) * powerScale);
 
         // 发射光束段
