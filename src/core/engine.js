@@ -1,7 +1,11 @@
+// src/core/engine.js
 import { createInput } from './input.js';
 import { createCamera } from './camera.js';
+import { createEvents } from './events.js';
 
 export function createEngine({ mountEl, scene }) {
+  let sceneRef = scene;
+
   const cvsBg = document.createElement('canvas');
   const cvsMain = document.createElement('canvas');
   const bg = cvsBg.getContext('2d', { alpha: false });
@@ -12,6 +16,7 @@ export function createEngine({ mountEl, scene }) {
 
   const input = createInput({ targetEl: mountEl });
   const camera = createCamera();
+  const events = createEvents();
 
   const screen = { w: 0, h: 0 };
   const time = { frame: 0, dt: 0, now: 0, prev: 0 };
@@ -35,7 +40,7 @@ export function createEngine({ mountEl, scene }) {
     time,
     input,
     camera,
-    // 下面这些由 scene.init() 填充（比如 world, hud...）
+    events,
     state: {},
   };
 
@@ -53,19 +58,18 @@ export function createEngine({ mountEl, scene }) {
     time.dt = Math.min(0.05, (ts - time.prev) / 1000);
     time.prev = ts;
 
-    // 清屏（壳子：你可以换成你的背景系统）
+    // input frame flags reset
+    g.input.beginFrame();
+
     bg.fillStyle = '#050508';
     bg.fillRect(0, 0, screen.w, screen.h);
     main.clearRect(0, 0, screen.w, screen.h);
 
-    // camera 开始（壳子：只做 shake 的 transform）
     camera.beginFrame(g);
 
-    // 更新/渲染场景
-    scene.update(g);
-    scene.render(g);
+    sceneRef.update(g);
+    sceneRef.render(g);
 
-    // camera 结束
     camera.endFrame(g);
 
     time.frame += 1;
@@ -78,16 +82,15 @@ export function createEngine({ mountEl, scene }) {
         return;
       }
       running = true;
-      scene.init(g);
+      sceneRef.init(g);
       requestAnimationFrame(tick);
     },
     stop() {
       running = false;
     },
     setScene(nextScene) {
-      // 壳子：不做销毁，后面你可以扩展 scene.dispose()
-      scene = nextScene;
-      scene.init(g);
+      sceneRef = nextScene;
+      sceneRef.init(g);
     },
   };
 }
