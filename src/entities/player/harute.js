@@ -43,13 +43,34 @@ export function createHarutePlayer() {
         g.state.weapon === 'MISSILE' && g.input.pointer.down ? 1 : 0;
       player.missileOpen += (targetMissileOpen - player.missileOpen) * 0.2;
 
-      // 武器逻辑更新
+      // Weapon Update
       const w = weapons[g.state.weapon] || weapons.RIFLE;
       w.update(g, player);
     },
 
     render(g) {
       const ctx = g.ctx2d.main;
+
+      // === Trans-Am Afterimage ===
+      if (g.state.mode === 'MARUTE') {
+        ctx.save();
+        // Jitter
+        ctx.translate(
+          player.x + (Math.random() - 0.5) * 4,
+          player.y + (Math.random() - 0.5) * 4,
+        );
+        ctx.globalAlpha = 0.3;
+        ctx.globalCompositeOperation = 'lighter';
+        // Simplified ghost shape
+        ctx.fillStyle = '#ff003c';
+        ctx.beginPath();
+        ctx.moveTo(0, -50);
+        ctx.lineTo(40, 30);
+        ctx.lineTo(-40, 30);
+        ctx.fill();
+        ctx.restore();
+      }
+
       ctx.save();
       ctx.translate(player.x, player.y);
 
@@ -57,7 +78,7 @@ export function createHarutePlayer() {
       const spread = tf * 25;
       const noseSplit = tf * 15;
 
-      // 1. 尾焰
+      // 1. Thruster Flame
       ctx.save();
       ctx.translate(0, 80);
       ctx.fillStyle = g.state.mode === 'MARUTE' ? '#f0f' : '#0ff';
@@ -73,22 +94,21 @@ export function createHarutePlayer() {
       ctx.shadowBlur = 0;
       ctx.restore();
 
-      // 2. *** GN Rifle (枪) ***
-      // 位于机体连接处下方，显眼的长管
+      // 2. *** GN Rifle ***
       const rifleColor = '#444';
       [-1, 1].forEach((side) => {
         ctx.save();
-        ctx.translate(side * (22 + spread), -10); // 根据 spread 移动
+        ctx.translate(side * (22 + spread), -10);
 
-        // 枪管
+        // Barrel
         ctx.fillStyle = rifleColor;
-        ctx.fillRect(-4, -60, 8, 80); // 长长的枪管
+        ctx.fillRect(-4, -60, 8, 80);
 
-        // 瞄准镜/传感器
+        // Sensor
         ctx.fillStyle = g.state.mode === 'MARUTE' ? '#ff003c' : '#00ffaa';
         ctx.fillRect(-1, -65, 2, 5);
 
-        // 枪口发光 (开火时)
+        // Muzzle Flash
         if (
           g.state.weapon === 'RIFLE' &&
           g.input.pointer.down &&
@@ -106,7 +126,7 @@ export function createHarutePlayer() {
         ctx.restore();
       });
 
-      // 3. Side Binders (侧面推进器/导弹舱)
+      // 3. Side Binders
       [-1, 1].forEach((side) => {
         ctx.save();
         ctx.scale(side, 1);
@@ -147,7 +167,7 @@ export function createHarutePlayer() {
           }
         }
 
-        // GN Condenser (Green/Red Strip)
+        // GN Condenser
         ctx.fillStyle = g.state.mode === 'MARUTE' ? '#ff003c' : '#00ffaa';
         ctx.shadowBlur = 10;
         ctx.shadowColor = ctx.fillStyle;
@@ -157,7 +177,7 @@ export function createHarutePlayer() {
         ctx.restore();
       });
 
-      // 4. 机身主体
+      // 4. Main Body
       ctx.fillStyle = '#eee';
       ctx.beginPath();
       ctx.moveTo(0, -50);
@@ -166,7 +186,7 @@ export function createHarutePlayer() {
       ctx.lineTo(-30, 20);
       ctx.fill();
 
-      // 5. 机头分裂
+      // 5. Nose Split
       // Left
       ctx.save();
       ctx.translate(-noseSplit, -30);
@@ -211,7 +231,7 @@ export function createHarutePlayer() {
         ctx.globalAlpha = 1;
       }
 
-      // 7. 驾驶舱
+      // 7. Cockpit
       ctx.fillStyle = '#111';
       ctx.beginPath();
       ctx.moveTo(0, -40);

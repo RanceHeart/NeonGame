@@ -35,15 +35,14 @@ export function createProjectileSystem() {
       return;
     }
 
-    // 核心修改：每一帧都生成拖尾，形成连续的光带
     g.spawn.particle({
       type: 'beam_trail',
       x: p.x,
       y: p.y,
       color: p.color,
-      size: p.width * 0.8, // 拖尾略小于弹头
-      decay: 0.1, // 消失得比较快，保持动态感
-      vx: 0, // 留在原地，不随子弹移动
+      size: p.width * 0.8,
+      decay: 0.1,
+      vx: 0,
       vy: 0,
     });
   }
@@ -61,20 +60,13 @@ export function createProjectileSystem() {
     p.life -= 1;
     if (p.life <= 0) {
       p.dead = true;
-      g.spawn.particle({
-        type: 'explosion',
-        x: p.x,
-        y: p.y,
-        color: p.color,
-        size: 25,
-      });
-      g.camera.addShake(2);
+      // Self-destruct on timeout
+      createMissileExplosion(g, p);
       return;
     }
 
     if (p.state === 'EJECT') {
       p.timer -= 1;
-
       p.vx *= 0.92;
       p.vy *= 0.92;
       p.vy += 0.2;
@@ -82,12 +74,14 @@ export function createProjectileSystem() {
       if (p.timer <= 0) {
         p.state = 'TRACK';
         p.speed = 3;
+        // Ignition effect
         g.spawn.particle({
           type: 'explosion',
           x: p.x,
           y: p.y,
           color: '#fff',
-          size: 5,
+          size: 8,
+          decay: 0.2,
         });
       }
     } else {
@@ -120,20 +114,51 @@ export function createProjectileSystem() {
     p.x += p.vx;
     p.y += p.vy;
 
-    g.spawn.particle({ type: 'gn_smoke', x: p.x, y: p.y, color: p.color });
-
-    const hitDist = Math.hypot(p.tx - p.x, p.ty - p.y);
-    if (hitDist < 40) {
-      p.dead = true;
+    // Increase smoke density
+    if (g.time.frame % 2 === 0 || p.marute) {
       g.spawn.particle({
-        type: 'explosion',
+        type: 'gn_smoke',
         x: p.x,
         y: p.y,
         color: p.color,
-        size: 25,
+        size: p.marute ? 6 : 4,
+        decay: 0.03,
       });
-      g.camera.addShake(2);
     }
+
+    const hitDist = Math.hypot(p.tx - p.x, p.ty - p.y);
+    // Detection range increased
+    if (hitDist < 50) {
+      p.dead = true;
+      createMissileExplosion(g, p);
+    }
+  }
+
+  function createMissileExplosion(g, p) {
+    const isBig = p.marute;
+    // Fireball
+    g.spawn.particle({
+      type: 'explosion',
+      x: p.x,
+      y: p.y,
+      color: p.color,
+      size: isBig ? 60 : 30, // Larger explosion
+      decay: isBig ? 0.05 : 0.1,
+    });
+
+    // Shockwave
+    g.spawn.particle({
+      type: 'shockwave',
+      x: p.x,
+      y: p.y,
+      color: '#fff',
+      size: 10,
+      maxSize: isBig ? 100 : 50,
+      life: 0.4,
+      width: 4,
+    });
+
+    g.camera.addShake(isBig ? 5 : 2);
   }
 
   function updateRailgunBeam(g, p) {
@@ -291,32 +316,30 @@ export function createProjectileSystem() {
         continue;
       }
 
-      // 核心修改：Rifle 重绘为 GN 光束 (尖锐的菱形/箭头)
       if (p.type === 'rifle') {
         ctx.save();
         ctx.translate(p.x, p.y);
         const ang = Math.atan2(p.vy || 0, p.vx || -1);
         ctx.rotate(ang);
 
-        // 1. 光晕层 (宽大，模糊)
+        // 1. Halo Layer
         ctx.globalCompositeOperation = 'lighter';
         ctx.shadowBlur = 20;
         ctx.shadowColor = p.color;
         ctx.fillStyle = p.color;
 
-        // 绘制一个梭形/菱形
         const len = p.length || 60;
         const wid = p.width || 12;
 
         ctx.beginPath();
-        ctx.moveTo(len / 2, 0); // 头部
-        ctx.lineTo(-len / 2, wid / 2); // 左翼
-        ctx.lineTo(-len / 2 - 10, 0); // 尾部凹槽
-        ctx.lineTo(-len / 2, -wid / 2); // 右翼
+        ctx.moveTo(len / 2, 0); // Head
+        ctx.lineTo(-len / 2, wid / 2); // Left wing
+        ctx.lineTo(-len / 2 - 10, 0); // Tail notch
+        ctx.lineTo(-len / 2, -wid / 2); // Right wing
         ctx.closePath();
         ctx.fill();
 
-        // 2. 核心层 (亮白，锐利)
+        // 2. Core Layer
         ctx.shadowBlur = 0;
         ctx.fillStyle = '#fff';
         ctx.beginPath();

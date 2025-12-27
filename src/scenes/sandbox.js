@@ -3,7 +3,7 @@ import { createWorld } from '../core/world.js';
 import { createHarutePlayer } from '../entities/player/harute.js';
 import { createHud } from '../ui/hud.js';
 import { createFunnelBit } from '../entities/player/funnel_bit.js';
-import { createScissorBit } from '../entities/player/scissor_bit.js'; // 引入新文件
+import { createScissorBit } from '../entities/player/scissor_bit.js';
 
 export function createSandboxScene() {
   let world;
@@ -33,19 +33,24 @@ export function createSandboxScene() {
       const player = createHarutePlayer();
       world.addEntity(player);
 
-      // 初始化数组
+      // Initialize arrays
       player.funnelBits = [];
       player.scissorBits = [];
 
-      // 1. 生成 Funnel Bits (负责射击) - 6个
-      for (let i = 0; i < 6; i++) {
+      // Bits quantity increased to 14
+      // 0-5: Always visible
+      // 6-13: Hidden (Activated only during Trans-Am)
+      const TOTAL_BITS = 14;
+
+      // 1. Generate Funnel Bits
+      for (let i = 0; i < TOTAL_BITS; i++) {
         const bit = createFunnelBit({ id: i, owner: player });
         player.funnelBits.push(bit);
         world.addEntity(bit);
       }
 
-      // 2. 生成 Scissor Bits (负责近战) - 6个
-      for (let i = 0; i < 6; i++) {
+      // 2. Generate Scissor Bits
+      for (let i = 0; i < TOTAL_BITS; i++) {
         const bit = createScissorBit({ id: i, owner: player });
         player.scissorBits.push(bit);
         world.addEntity(bit);
@@ -63,7 +68,7 @@ export function createSandboxScene() {
       const ctx = g.ctx2d.main;
       ctx.fillStyle = '#0ff';
       ctx.font = '12px monospace';
-      ctx.fillText('SANDBOX - SCISSOR & FUNNEL SEPARATED', 12, 20);
+      ctx.fillText('SANDBOX - TRANS-AM ENHANCED', 12, 20);
     },
   };
 }

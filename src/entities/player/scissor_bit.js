@@ -7,52 +7,70 @@ export function createScissorBit({ id, owner }) {
     owner,
     bitId: id,
 
-    // 物理属性
+    // Physics
     x: owner.x,
     y: owner.y,
     vx: 0,
     vy: 0,
     angle: -Math.PI / 2,
 
-    // 状态机: DOCKED | DEPLOY | HUNT | CHAOS_CUT | COOLDOWN | RETURN
+    // State Machine: DOCKED | DEPLOY | HUNT | CHAOS_CUT | COOLDOWN | RETURN
     state: 'DOCKED',
     timer: 0,
 
-    // 斩击参数
+    // Slash Parameters
     chaosCenter: { x: 0, y: 0 },
     chaosAmp: 0,
     dashTarget: { x: 0, y: 0 },
     dashCount: 0,
     dashState: 'IDLE', // 'MOVING' or 'WAIT'
 
-    // 视觉
+    // Visuals
     bladeOpen: 0,
     scale: 0.6,
     trail: [],
 
     update(g) {
       const isMarute = g.state.mode === 'MARUTE';
+      const isHiddenBit = bit.bitId >= 6; // ID >= 6 are hidden Bits
+
+      // --- Hidden Bit Logic ---
+      // If not Marute mode, hidden bits are forced to dock and sleep
+      if (isHiddenBit && !isMarute) {
+        bit.state = 'DOCKED';
+        bit.x = owner.x;
+        bit.y = owner.y;
+        bit.vx = 0;
+        bit.vy = 0;
+        bit.bladeOpen = 0;
+        bit.trail = [];
+        return; // Skip update and render
+      }
+
       const isActive = g.state.weapon === 'SCISSOR' && g.input.pointer.down;
 
-      // --- 全局状态流转 ---
+      // --- Global State Flow ---
 
-      // 1. 发射触发
+      // 1. Launch Trigger
       if (isActive && bit.state === 'DOCKED') {
-        if (g.time.frame % (10 + bit.bitId * 5) === 0) {
+        // Stagger launch for hidden bits
+        const delayBase = isHiddenBit ? 15 : 10;
+        if (g.time.frame % (delayBase + (bit.bitId % 6) * 5) === 0) {
           bit.state = 'DEPLOY';
-          bit.timer = 8;
-          bit.vx = (Math.random() - 0.5) * 12; // 初始爆发速度快一点
-          bit.vy = (Math.random() - 0.5) * 12;
+          bit.timer = isMarute ? 5 : 8; // Faster deploy in Marute
+          // Initial burst speed
+          const speed = isMarute ? 18 : 12;
+          bit.vx = (Math.random() - 0.5) * speed;
+          bit.vy = (Math.random() - 0.5) * speed;
         }
       }
 
-      // 2. 强制召回 (松手即回)
-      // 注意：如果是在 COOLDOWN (连斩间隙) 松手，也应该立刻回家
+      // 2. Forced Return
       if (!isActive && bit.state !== 'DOCKED' && bit.state !== 'RETURN') {
         bit.state = 'RETURN';
       }
 
-      // --- 行为执行 ---
+      // --- Behavior Execution ---
       switch (bit.state) {
         case 'DEPLOY':
           bit.updateDeploy(g);
@@ -65,7 +83,7 @@ export function createScissorBit({ id, owner }) {
           break;
         case 'COOLDOWN':
           bit.updateCooldown(g);
-          break; // 新增：连斩间的调整
+          break;
         case 'RETURN':
           bit.updateReturn(g, isMarute);
           break;
@@ -75,33 +93,28 @@ export function createScissorBit({ id, owner }) {
           break;
       }
 
-      // --- 物理积分 ---
-      // CHAOS_CUT 自己控制位移，其他状态使用标准积分
+      // --- Physics Integration ---
       if (bit.state !== 'CHAOS_CUT' && bit.state !== 'RETURN') {
         bit.x += bit.vx;
         bit.y += bit.vy;
       }
 
-      // --- 视觉效果 ---
-
-      // 拖尾生成
+      // --- Visual Effects ---
       const speed = Math.hypot(bit.vx, bit.vy);
       if (bit.state === 'CHAOS_CUT' || speed > 5) {
         bit.trail.push({
           x: bit.x,
           y: bit.y,
           life: 1.0,
-          width: bit.state === 'CHAOS_CUT' ? 4 : 2, // 斩击时拖尾更宽
+          width: bit.state === 'CHAOS_CUT' ? (isMarute ? 6 : 4) : 2,
         });
       }
 
-      // 拖尾更新
       for (let i = bit.trail.length - 1; i >= 0; i--) {
-        bit.trail[i].life -= 0.08;
+        bit.trail[i].life -= isMarute ? 0.05 : 0.08; // Longer trail in Marute
         if (bit.trail[i].life <= 0) bit.trail.splice(i, 1);
       }
 
-      // 角度控制 (斩击时由逻辑锁定，不自动旋转)
       if (bit.state !== 'DOCKED' && bit.state !== 'CHAOS_CUT') {
         if (speed > 1) {
           const target = Math.atan2(bit.vy, bit.vx);
@@ -113,11 +126,9 @@ export function createScissorBit({ id, owner }) {
       }
     },
 
-    // --- 状态方法 ---
-
     updateDeploy(g) {
       bit.bladeOpen += 0.15;
-      bit.vx *= 0.85; // 快速减速，准备进入追踪
+      bit.vx *= 0.85;
       bit.vy *= 0.85;
       bit.timer--;
       if (bit.timer <= 0) bit.state = 'HUNT';
@@ -132,117 +143,125 @@ export function createScissorBit({ id, owner }) {
       const dy = ty - bit.y;
       const dist = Math.hypot(dx, dy);
 
-      // 攻击判定范围
-      const attackRange = 180;
+      // Attack Range
+      const attackRange = isMarute ? 350 : 180; // Significantly larger in Marute
 
-      // 高速接近
-      const speed = isMarute ? 1.5 : 1.0;
+      const speed = isMarute ? 2.5 : 1.0; // Faster approach
       bit.vx += (dx / dist) * speed;
       bit.vy += (dy / dist) * speed;
       bit.vx *= 0.92;
       bit.vy *= 0.92;
 
       if (dist < attackRange) {
-        // 进入斩击模式
         bit.state = 'CHAOS_CUT';
-        bit.dashCount = isMarute ? 8 : 6; // 六连斩
+        bit.dashCount = isMarute ? 12 : 6; // Double cuts
         bit.dashState = 'WAIT';
-        bit.timer = 5;
+        bit.timer = isMarute ? 3 : 5;
 
-        // 设定中心点
         bit.chaosCenter = { x: tx, y: ty };
-        // 范围扩大 (120 ~ 220)
-        bit.chaosAmp = 120 + Math.random() * 100;
+        // *** Chaos Amplitude Increase ***
+        // Normal: 120~220 -> Marute: 300~500
+        const baseAmp = isMarute ? 300 : 120;
+        bit.chaosAmp = baseAmp + Math.random() * (isMarute ? 200 : 100);
       }
     },
 
     updateChaosCut(g, isMarute) {
       bit.bladeOpen = 1.2;
 
-      // 软跟随鼠标中心
+      // Soft follow mouse center
       bit.chaosCenter.x += (g.input.pointer.x - bit.chaosCenter.x) * 0.1;
       bit.chaosCenter.y += (g.input.pointer.y - bit.chaosCenter.y) * 0.1;
 
       if (bit.dashState === 'WAIT') {
-        // 蓄力停顿
         bit.timer--;
-        // 漂浮阻尼
         bit.vx *= 0.8;
         bit.vy *= 0.8;
-        bit.x += bit.vx; // 此时还是允许微小移动
+        bit.x += bit.vx;
         bit.y += bit.vy;
 
         if (bit.timer <= 0) {
           bit.pickNextDashPoint();
           bit.dashState = 'MOVING';
 
-          // 计算冲刺参数
           const dx = bit.dashTarget.x - bit.x;
           const dy = bit.dashTarget.y - bit.y;
           const dist = Math.hypot(dx, dy);
-          const dashSpeed = isMarute ? 28 : 22; // 极快
+          // Extreme speed
+          const dashSpeed = isMarute ? 50 : 22;
 
-          // 几帧到达？
           const frames = Math.ceil(dist / dashSpeed);
           bit.timer = Math.max(1, frames);
 
           bit.vx = (dx / dist) * dashSpeed;
           bit.vy = (dy / dist) * dashSpeed;
-          bit.angle = Math.atan2(dy, dx); // 刀尖对准冲刺方向
+          bit.angle = Math.atan2(dy, dx);
 
-          // 斩击音效/闪光可在此处添加
-          g.spawn.particle({
-            type: 'spark',
-            x: bit.x,
-            y: bit.y,
-            color: '#fff',
-            size: 3,
-          });
+          // Dash Start Shockwave
+          if (isMarute) {
+            g.spawn.particle({
+              type: 'shockwave',
+              x: bit.x,
+              y: bit.y,
+              color: '#ff003c',
+              size: 10,
+              maxSize: 60,
+              life: 0.3,
+              width: 3,
+            });
+          }
         }
       } else if (bit.dashState === 'MOVING') {
-        // 冲刺过程
         bit.x += bit.vx;
         bit.y += bit.vy;
 
-        // 残影
-        if (g.time.frame % 2 === 0) {
+        // More dense afterimages
+        if (g.time.frame % 1 === 0) {
           const color = isMarute ? '#ff003c' : '#00ffaa';
           g.spawn.particle({
             type: 'slash',
-            x1: bit.x - bit.vx,
-            y1: bit.y - bit.vy,
+            x1: bit.x - bit.vx * 1.5,
+            y1: bit.y - bit.vy * 1.5,
             x2: bit.x,
             y2: bit.y,
             color,
-            thick: 5,
-            life: 0.4,
+            thick: isMarute ? 8 : 5,
+            life: isMarute ? 0.6 : 0.4,
           });
         }
 
         bit.timer--;
         if (bit.timer <= 0) {
-          // 强制到达终点
           bit.x = bit.dashTarget.x;
           bit.y = bit.dashTarget.y;
+
+          // Impact Explosion
+          if (isMarute) {
+            g.spawn.particle({
+              type: 'explosion',
+              x: bit.x,
+              y: bit.y,
+              color: '#fff',
+              size: 30,
+              decay: 0.2,
+            });
+            g.camera.addShake(2);
+          }
 
           bit.dashCount--;
           if (bit.dashCount > 0) {
             bit.dashState = 'WAIT';
-            bit.timer = isMarute ? 2 : 4; // 顿帧
+            bit.timer = isMarute ? 1 : 4; // Almost no pause in Marute
           } else {
-            // === 连斩结束决策 ===
             const isActive =
               g.state.weapon === 'SCISSOR' && g.input.pointer.down;
             if (isActive) {
-              // 如果还按着鼠标，进入冷却调整，准备下一轮
               bit.state = 'COOLDOWN';
-              bit.timer = 15; // 休息 15 帧 (0.25秒)
-              // 给一个散开的速度
+              bit.timer = isMarute ? 5 : 15; // Faster cooldown
               const ang = Math.random() * 6.28;
               bit.vx = Math.cos(ang) * 5;
               bit.vy = Math.sin(ang) * 5;
             } else {
-              // 没按鼠标，回家
               bit.state = 'RETURN';
             }
           }
@@ -251,76 +270,58 @@ export function createScissorBit({ id, owner }) {
     },
 
     updateCooldown(g) {
-      // 这是一个在目标附近盘旋的临时状态
       bit.timer--;
       bit.vx *= 0.9;
       bit.vy *= 0.9;
-
-      // 稍微被鼠标吸引，防止飞太远
       const dx = g.input.pointer.x - bit.x;
       const dy = g.input.pointer.y - bit.y;
       bit.vx += dx * 0.02;
       bit.vy += dy * 0.02;
 
       if (bit.timer <= 0) {
-        // 冷却结束，重新开始狩猎（几乎会立刻触发斩击，因为距离很近）
         bit.state = 'HUNT';
       }
     },
 
     pickNextDashPoint() {
       const angle = Math.random() * Math.PI * 2;
-      const r = Math.sqrt(Math.random()) * bit.chaosAmp; // 均匀分布
+      // Distribute points further out
+      const r = (0.5 + Math.random() * 0.5) * bit.chaosAmp;
       bit.dashTarget = {
         x: bit.chaosCenter.x + Math.cos(angle) * r,
         y: bit.chaosCenter.y + Math.sin(angle) * r,
       };
-
-      // 避免原地踏步
-      if (Math.hypot(bit.dashTarget.x - bit.x, bit.dashTarget.y - bit.y) < 80) {
-        bit.dashTarget.x = bit.chaosCenter.x + Math.cos(angle) * bit.chaosAmp;
-        bit.dashTarget.y = bit.chaosCenter.y + Math.sin(angle) * bit.chaosAmp;
-      }
     },
 
     updateReturn(g, isMarute) {
-      const side = bit.bitId % 2 === 0 ? -1 : 1;
-      const idx = Math.floor(bit.bitId / 2);
-      const spread = owner.transformFactor * 25;
+      const { tx, ty } = bit.getDockingPosition();
+      const dx = tx - bit.x;
+      const dy = ty - bit.y;
 
-      const tx = owner.x + side * (32 + spread);
-      const ty = owner.y + 10 + idx * 10;
-
-      // 回归速度
-      bit.x += (tx - bit.x) * 0.15;
-      bit.y += (ty - bit.y) * 0.15;
+      bit.x += dx * 0.15;
+      bit.y += dy * 0.15;
       bit.bladeOpen += (0 - bit.bladeOpen) * 0.15;
 
-      // 角度复位
       let diff = -Math.PI / 2 - bit.angle;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       bit.angle += diff * 0.2;
 
-      // *** 修复：判定范围从 3 增加到 20 ***
-      // 这样即使飞船在移动，也能成功吸附 docking
       if (Math.hypot(tx - bit.x, ty - bit.y) < 20) {
         bit.state = 'DOCKED';
-        bit.x = tx; // 强制吸附
+        bit.x = tx;
         bit.y = ty;
-        bit.vx = 0; // 清空速度
+        bit.vx = 0;
         bit.vy = 0;
         bit.angle = -Math.PI / 2;
       }
     },
 
     updateDocked(g, isMarute) {
-      const side = bit.bitId % 2 === 0 ? -1 : 1;
-      const idx = Math.floor(bit.bitId / 2);
-      const spread = owner.transformFactor * 25;
+      const { tx, ty } = bit.getDockingPosition();
 
-      bit.x = owner.x + side * (32 + spread);
-      bit.y = owner.y + 10 + idx * 10;
+      bit.x = tx;
+      bit.y = ty;
       bit.vx = 0;
       bit.vy = 0;
       bit.angle = -Math.PI / 2;
@@ -333,17 +334,37 @@ export function createScissorBit({ id, owner }) {
       }
     },
 
+    getDockingPosition() {
+      const side = bit.bitId % 2 === 0 ? -1 : 1;
+      const idx = Math.floor(bit.bitId / 2);
+      const spread = owner.transformFactor * 25;
+
+      // Hidden bits are placed further out
+      const xOffset = 32 + spread + (bit.bitId >= 6 ? 15 : 0);
+      const yOffset = 10 + idx * 10;
+
+      const tx = owner.x + side * xOffset;
+      const ty = owner.y + yOffset;
+      return { tx, ty };
+    },
+
     render(g) {
-      const ctx = g.ctx2d.main;
+      const isHiddenBit = bit.bitId >= 6;
       const isMarute = g.state.mode === 'MARUTE';
+
+      if (isHiddenBit && !isMarute) return;
+
+      const ctx = g.ctx2d.main;
       const color = isMarute ? '#ff003c' : '#00ffaa';
 
-      // 拖尾绘制
+      // Trail
       if (bit.trail.length > 1) {
         ctx.save();
         ctx.strokeStyle = color;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
+        ctx.shadowBlur = isMarute ? 15 : 0; // Glow in Marute
+        ctx.shadowColor = color;
         ctx.beginPath();
         for (let i = 0; i < bit.trail.length; i++) {
           const p = bit.trail[i];
@@ -361,17 +382,15 @@ export function createScissorBit({ id, owner }) {
       ctx.rotate(bit.angle + Math.PI / 2);
 
       const scale = isMarute ? 0.7 : 0.55;
-
-      // 冲刺时的视觉拉伸 (Squash & Stretch)
       let scaleY = scale;
       if (bit.state === 'CHAOS_CUT' && bit.dashState === 'MOVING') {
-        scaleY = scale * 1.6; // 拉长
+        scaleY = scale * 1.6;
       }
       ctx.scale(scale, scaleY);
 
       const open = bit.bladeOpen;
 
-      // 本体
+      // Body
       ctx.fillStyle = '#333';
       ctx.beginPath();
       ctx.moveTo(0, 5);
@@ -380,7 +399,7 @@ export function createScissorBit({ id, owner }) {
       ctx.lineTo(3, 0);
       ctx.fill();
 
-      // 刀刃
+      // Blade
       ctx.fillStyle = isMarute ? '#822' : '#ddd';
 
       // Left Blade
