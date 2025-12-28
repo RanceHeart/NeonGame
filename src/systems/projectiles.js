@@ -11,11 +11,23 @@ function normAngleDiff(d) {
   return d;
 }
 
+/**
+ * 创建 projectile 系统：
+ * - list 存所有 projectile
+ * - spawn/update/render
+ * - 按 p.type 分派到不同 update/render 逻辑（rifle/missile/funnel_beam/railgun_beam）
+ * @returns {{ spawn:(p:any)=>void, clear:()=>void, update:(g:any)=>void, render:(g:any)=>void, list:any[] }}
+ */
 export function createProjectileSystem() {
   const list = [];
 
   function spawn(p) {
     list.push({ ...p });
+  }
+
+  // === 关键修复：添加清空方法 ===
+  function clear() {
+    list.length = 0;
   }
 
   function updateRifle(g, p) {
@@ -314,5 +326,5 @@ export function createProjectileSystem() {
     }
   }
 
-  return { spawn, update, render, list };
+  return { spawn, clear, update, render, list };
 }

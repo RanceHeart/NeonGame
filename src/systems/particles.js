@@ -1,4 +1,11 @@
 // src/systems/particles.js
+/**
+ * 创建粒子系统：
+ * - spawn: 进入列表
+ * - update: 基于 type 补默认参数并积分
+ * - render: 按 type 画不同特效
+ * @returns {{ spawn:(p:any)=>void, spawnHitEffect:(x,y,type,col)=>void, spawnShipExplosion:(x,y,col)=>void, clear:()=>void, update:(g:any)=>void, render:(g:any)=>void, list:any[] }}
+ */
 export function createParticleSystem() {
   const list = [];
 
@@ -6,12 +13,23 @@ export function createParticleSystem() {
     const life = p.life || 30;
     list.push({
       ...p,
-      type: (p.type || '').toUpperCase(), // === ⚡️ 修复 2: 强制大写，解决 "绿球" 问题 ===
+      type: (p.type || '').toUpperCase(),
       life: life,
       maxLife: p.maxLife || life,
       vx: p.vx || 0,
       vy: p.vy || 0,
+      // Debris specific properties
+      rot: Math.random() * Math.PI * 2,
+      rotSpd: (Math.random() - 0.5) * 0.2,
+      shape: Math.floor(Math.random() * 3), // 0:Tri, 1:Rect, 2:Shard
+      w: p.w || Math.random() * 10 + 5,
+      h: p.h || Math.random() * 10 + 5,
     });
+  }
+
+  // === 关键修复：添加清空方法 ===
+  function clear() {
+    list.length = 0;
   }
 
   function spawnHitEffect(x, y, weaponType, color) {
@@ -163,6 +181,61 @@ export function createParticleSystem() {
     }
   }
 
+  // === NEW: Massive Death Effect ===
+  function spawnShipExplosion(x, y, color) {
+    // 1. Core Flash
+    spawn({
+      type: 'SHOCKWAVE',
+      x,
+      y,
+      size: 10,
+      maxSize: 150,
+      color: '#fff',
+      life: 20,
+    });
+    spawn({
+      type: 'SHOCKWAVE',
+      x,
+      y,
+      size: 10,
+      maxSize: 100,
+      color: color,
+      life: 25,
+      width: 5,
+    });
+
+    // 2. Debris (Ship Parts)
+    for (let i = 0; i < 15; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const spd = 2 + Math.random() * 5;
+      spawn({
+        type: 'DEBRIS',
+        x: x,
+        y: y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        color: i % 2 === 0 ? color : '#555', // Mix hull color and ship color
+        life: 60 + Math.random() * 60,
+        w: 5 + Math.random() * 10,
+        h: 5 + Math.random() * 10,
+      });
+    }
+
+    // 3. Fireball Cloud
+    for (let i = 0; i < 20; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = Math.random() * 30;
+      spawn({
+        type: 'EXPLOSION',
+        x: x + Math.cos(ang) * dist,
+        y: y + Math.sin(ang) * dist,
+        size: 20 + Math.random() * 30,
+        color: Math.random() > 0.5 ? color : '#fff',
+        life: 30 + Math.random() * 20,
+      });
+    }
+  }
+
   function update(g) {
     const FRICTION = 0.92;
     for (let i = list.length - 1; i >= 0; i--) {
@@ -171,7 +244,11 @@ export function createParticleSystem() {
       p.x += p.vx;
       p.y += p.vy;
 
-      if (p.type === 'SMOKE') {
+      if (p.type === 'DEBRIS') {
+        p.rot += p.rotSpd;
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+      } else if (p.type === 'SMOKE') {
         p.vx *= 0.95;
         p.vy *= 0.95;
         p.size += 0.5;
@@ -186,6 +263,9 @@ export function createParticleSystem() {
         p.size *= 0.9;
       } else if (p.type === 'BEAM_TRAIL') {
         p.size *= 0.8;
+      } else if (p.type === 'EXPLOSION') {
+        p.vx *= FRICTION;
+        p.vy *= FRICTION;
       }
 
       if (p.life <= 0) list.splice(i, 1);
@@ -205,7 +285,31 @@ export function createParticleSystem() {
       ctx.fillStyle = p.color || '#fff';
       ctx.strokeStyle = p.color || '#fff';
 
-      // 所有的类型判断现在都必须是大写
+      if (p.type === 'DEBRIS') {
+        // Debris Rendering
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        // Simple switch based on shape ID
+        if (p.shape === 0) {
+          // Triangle
+          ctx.beginPath();
+          ctx.moveTo(-p.w / 2, p.h / 2);
+          ctx.lineTo(0, -p.h / 2);
+          ctx.lineTo(p.w / 2, p.h / 2);
+          ctx.fill();
+        } else if (p.shape === 1) {
+          // Rect
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        } else {
+          // Shard
+          ctx.fillRect(-p.w / 2, -1, p.w, 2);
+        }
+        ctx.restore();
+        continue;
+      }
+
       if (p.type === 'ELECTRIC_ARC') {
         ctx.lineWidth = 2;
         ctx.shadowBlur = 5;
@@ -282,5 +386,13 @@ export function createParticleSystem() {
     ctx.restore();
   }
 
-  return { spawn, spawnHitEffect, update, render, list };
+  return {
+    spawn,
+    spawnHitEffect,
+    spawnShipExplosion,
+    clear,
+    update,
+    render,
+    list,
+  };
 }

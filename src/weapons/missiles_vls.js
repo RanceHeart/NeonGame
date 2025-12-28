@@ -1,4 +1,11 @@
 // src/weapons/missiles_vls.js
+/**
+ * 创建 VLS 导弹武器：
+ * - 按住 pointer 按频率发射
+ * - 每次从 owner.vlsIndex 轮询一个发射单元
+ * - projectile type: 'missile'（在 projectile system 里有对应逻辑）
+ * @returns {{name:string, update:(g:any, owner:any)=>void}}
+ */
 export function createVlsMissiles() {
   return {
     name: 'MISSILE',

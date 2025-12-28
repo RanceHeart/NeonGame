@@ -5,6 +5,13 @@ import { createFunnelsWeapon } from '../../weapons/funnels.js';
 import { createScissorWeapon } from '../../weapons/scissor.js';
 import { createRailgunWeapon } from '../../weapons/railgun.js';
 
+/**
+ * 创建玩家 Harute 实体：
+ * - 负责机体位置/变形插值/后坐力
+ * - 调用当前武器 update
+ * - 提供 render + hit shape
+ * @returns {any} player entity
+ */
 export function createHarutePlayer() {
   const weapons = {
     RIFLE: createRifleWeapon(),

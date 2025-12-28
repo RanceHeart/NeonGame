@@ -1,4 +1,12 @@
 // src/weapons/railgun.js
+/**
+ * 创建 Railgun 武器：
+ * - 状态机：IDLE -> CHARGING -> FIRING -> COOLDOWN
+ * - CHARGING：按住蓄力（有震动/粒子/charging effect）
+ * - FIRING：持续照射（消耗 charge，生成 railgun_beam 段）
+ * - COOLDOWN：过热冷却（冒烟 + UI）
+ * @returns {any}
+ */
 export function createRailgunWeapon() {
   // 状态枚举：IDLE, CHARGING, FIRING, COOLDOWN
   let state = 'IDLE';

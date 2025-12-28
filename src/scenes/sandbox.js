@@ -6,10 +6,15 @@ import { createFunnelBit } from '../entities/player/funnel_bit.js';
 import { createScissorBit } from '../entities/player/scissor_bit.js';
 import { createSpawner } from '../core/spawn.js';
 
+/**
+ * Sandbox 场景：HUD + Harute + 12 个 funnel bits（用于武器演示）。
+ * @returns {{init:(g:any)=>void, update:(g:any)=>void, render:(g:any)=>void}}
+ */
 export function createSandboxScene() {
   let world;
   let hud;
   let isActive = false;
+  let sceneSpawn; // 保存当前场景的 spawner 引用
 
   return {
     init(g) {
@@ -19,12 +24,16 @@ export function createSandboxScene() {
 
       const spawner = createSpawner(world);
 
-      // === 关键修改：绑定 spawnHitEffect ===
-      g.spawn = {
+      // 创建并保存属于这个场景的 spawner
+      sceneSpawn = {
         ...spawner,
         spawnHitEffect: (x, y, type, col) =>
           world.spawnHitEffect(x, y, type, col),
+        spawnShipExplosion: (x, y, col) => world.spawnShipExplosion(x, y, col),
       };
+
+      // 初始化时设置 (会被后续场景的 init 覆盖，所以 show/update 里需要恢复)
+      g.spawn = sceneSpawn;
 
       g.state = {
         ...g.state,
@@ -50,16 +59,30 @@ export function createSandboxScene() {
         world.addEntity(bit);
       }
 
-      // Enemies
-      g.spawn.boss('omega', { x: g.screen.w / 2, y: 160, phase: 0 });
-      g.spawn.boss('omega', { x: g.screen.w / 2 - 240, y: 210, phase: 1 });
-      g.spawn.boss('omega', { x: g.screen.w / 2 + 240, y: 210, phase: 2 });
+      // === NEW: Spawn Variety of Enemies ===
 
-      for (let i = 0; i < 10; i++) {
+      // 1. Phalanx Wall (Frigates)
+      for (let i = 0; i < 3; i++) {
+        g.spawn.enemy('phalanx', { x: 100 + i * 120, y: 100 + i * 30 });
+      }
+
+      // 2. Vector Swarm (Interceptors)
+      for (let i = 0; i < 5; i++) {
+        g.spawn.enemy('vector', {
+          x: Math.random() * g.screen.w,
+          y: -Math.random() * 200,
+        });
+      }
+
+      // 3. Gauss Sniper (Destroyer)
+      g.spawn.enemy('gauss', { x: g.screen.w - 100, y: 150 });
+
+      // Keep some original drones for comparison
+      for (let i = 0; i < 5; i++) {
         g.spawn.enemy('drone', {
-          x: 140 + i * 70,
-          y: 360 + (i % 2) * 40,
-          phase: i % 3,
+          x: 50 + i * 50,
+          y: 300,
+          phase: 0,
         });
       }
 
@@ -69,16 +92,28 @@ export function createSandboxScene() {
 
     show(g) {
       isActive = true;
+      // === 关键修复：进入场景时，强制接管 g.spawn ===
+      if (sceneSpawn) {
+        g.spawn = sceneSpawn;
+      }
       hud.show();
     },
 
     hide(g) {
       isActive = false;
       hud.hide();
+      // === 关键修复：离开场景时清理子弹，避免残留 ===
+      if (world) world.clearTransients();
     },
 
     update(g) {
       if (!isActive) return;
+
+      // === 双重保险：确保 update 时 spawn 指向自己 ===
+      if (sceneSpawn && g.spawn !== sceneSpawn) {
+        g.spawn = sceneSpawn;
+      }
+
       hud.update(g);
       world.update(g);
     },
@@ -88,9 +123,9 @@ export function createSandboxScene() {
       world.render(g);
 
       const ctx = g.ctx2d.main;
-      ctx.fillStyle = '#0ff';
-      ctx.font = '12px monospace';
-      ctx.fillText('SANDBOX - HIT VFX ACTIVE', 12, 20);
+      ctx.fillStyle = '#fff';
+      ctx.font = '10px monospace';
+      ctx.fillText('ENEMIES: VECTOR / PHALANX / GAUSS / DRONE', 12, 20);
     },
   };
 }

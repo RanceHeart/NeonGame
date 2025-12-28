@@ -1,4 +1,13 @@
 // src/ui/hud.js
+
+/**
+ * 创建 HUD（DOM Overlay）：
+ * - 模式切换按钮（NORMAL / MARUTE）
+ * - 武器切换按钮（RIFLE/SCISSOR/MISSILE/FUNNEL/CANNON）
+ * - 目标准星 reticle 跟随 pointer
+ * 注意：HUD 只负责改 g.state 并 emit，不直接控制游戏逻辑。
+ * @returns {{ mount:(g:any)=>void, unmount:(g:any)=>void, update:(g:any)=>void }}
+ */
 export function createHud() {
   const hud = {
     rootEl: null,

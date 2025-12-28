@@ -1,4 +1,17 @@
 // src/weapons/rifle.js
+/**
+ * 将瞄准角 rawAngle 夹到“朝前扇形”内，避免玩家往下射导致手感怪。
+ * 规则：
+ * - 玩家朝向固定为 -PI/2（向上）
+ * - 扇形角度 +-45°
+ * - 如果 aim 在 origin 下方，强制夹到左右边界（保持原 HTML 手感）
+ * @param {number} rawAngle
+ * @param {number} originX
+ * @param {number} originY
+ * @param {number} aimX
+ * @param {number} aimY
+ * @returns {number} clamped angle
+ */
 function clampAngleToForward(rawAngle, originX, originY, aimX, aimY) {
   const playerFacing = -Math.PI / 2;
   const maxAngle = 45 * (Math.PI / 180);

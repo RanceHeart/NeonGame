@@ -1,4 +1,11 @@
 // src/entities/player/funnel_bit.js
+/**
+ * 创建 Funnel Bit（可独立作为 entity 加入 world）。
+ * - 具备简单状态机：DOCKED/EJECT/ATTACK/RETURN + SLASH（大招瞬移）
+ * - 运动：EJECT/ATTACK 使用速度积分；RETURN/DOCKED 直接吸附/跟随
+ * @param {{ id:number, owner:any }} params
+ * @returns {any} bit entity
+ */
 export function createFunnelBit({ id, owner }) {
   const bit = {
     id: `player.funnel.${id}`,
@@ -147,8 +154,8 @@ export function createFunnelBit({ id, owner }) {
 
       // Binder Inner edge approx x=35.
       // We want them to form a vertical rack.
-      const rackX = 35 + spread;
-      const rackY = 15 + idx * 5; // Tightly stacked
+      const rackX = 37 + spread;
+      const rackY = 16 + idx * 4; // Tightly stacked
 
       const tx = owner.x + side * rackX;
       const ty = owner.y + rackY;

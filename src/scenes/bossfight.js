@@ -10,6 +10,7 @@ export function createBossFightScene() {
   let world;
   let hud;
   let isActive = false;
+  let sceneSpawn; // 保存当前场景的 spawner 引用
 
   return {
     init(g) {
@@ -17,13 +18,15 @@ export function createBossFightScene() {
       hud = createHud();
       hud.mount(g);
 
-      // === 关键修改：绑定 spawnHitEffect ===
-      g.spawn = {
+      sceneSpawn = {
         projectile: (p) => world.spawnProjectile(p),
         particle: (p) => world.spawnParticle(p),
         spawnHitEffect: (x, y, type, col) =>
           world.spawnHitEffect(x, y, type, col),
+        spawnShipExplosion: (x, y, col) => world.spawnShipExplosion(x, y, col),
       };
+
+      g.spawn = sceneSpawn;
 
       g.state = {
         ...g.state,
@@ -53,6 +56,10 @@ export function createBossFightScene() {
 
     show(g) {
       isActive = true;
+      // === 关键修复：进入场景时，强制接管 g.spawn ===
+      if (sceneSpawn) {
+        g.spawn = sceneSpawn;
+      }
       hud.show();
       if (g.state) g.state.activeScene = 'boss';
       hud.sync();
@@ -61,10 +68,18 @@ export function createBossFightScene() {
     hide(g) {
       isActive = false;
       hud.hide();
+      // === 关键修复：离开时清理 ===
+      if (world) world.clearTransients();
     },
 
     update(g) {
       if (!isActive) return;
+
+      // === 双重保险 ===
+      if (sceneSpawn && g.spawn !== sceneSpawn) {
+        g.spawn = sceneSpawn;
+      }
+
       hud.update(g);
       world.update(g);
     },

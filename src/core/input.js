@@ -1,4 +1,11 @@
 // src/core/input.js
+/**
+ * 创建统一输入（鼠标/触摸）适配层。
+ * - pointer: {x,y,down,justDown,justUp}
+ * - beginFrame: 每帧重置 justDown/justUp
+ * @param {{ targetEl: HTMLElement }} options
+ * @returns {{ pointer:{x:number,y:number,down:boolean,justDown:boolean,justUp:boolean}, beginFrame:()=>void }}
+ */
 export function createInput({ targetEl }) {
   const pointer = { x: 0, y: 0, down: false, justDown: false, justUp: false };
 

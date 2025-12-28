@@ -3,6 +3,16 @@ import { createInput } from './input.js';
 import { createCamera } from './camera.js';
 import { createEvents } from './events.js';
 
+/**
+ * 创建引擎：
+ * - 双 canvas（bg + main）
+ * - RAF 主循环
+ * - resize
+ * - 注入 g（ctx2d/screen/time/input/camera/events/state）
+ * - 调用 scene.init/update/render
+ * @param {{ mountEl:HTMLElement, scene:any }} params
+ * @returns {{ start:()=>void, stop:()=>void, setScene:(nextScene:any)=>void }}
+ */
 export function createEngine({ mountEl, scene }) {
   let sceneRef = scene;
 

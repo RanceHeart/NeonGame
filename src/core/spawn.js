@@ -2,6 +2,10 @@
 import { createOmegaBoss } from '../entities/boss/omega.js';
 import { createDroneEnemy } from '../entities/enemy/drone.js';
 import { createTurretEnemy } from '../entities/enemy/turret.js';
+// New imports
+import { createVectorEnemy } from '../entities/enemy/vector.js';
+import { createPhalanxEnemy } from '../entities/enemy/phalanx.js';
+import { createGaussEnemy } from '../entities/enemy/gauss.js';
 
 export function createSpawner(world) {
   const registry = {
@@ -11,6 +15,9 @@ export function createSpawner(world) {
     enemy: {
       drone: createDroneEnemy,
       turret: createTurretEnemy,
+      vector: createVectorEnemy,
+      phalanx: createPhalanxEnemy,
+      gauss: createGaussEnemy,
     },
   };
 

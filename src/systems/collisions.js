@@ -1,4 +1,11 @@
 // src/systems/collisions.js
+/**
+ * 创建碰撞系统（当前是壳子）。
+ * 未来可在 update 内做：
+ * - player projectile -> boss hit
+ * - boss projectile -> player hit
+ * @returns {{ update:(g:any, ctx:{entities:any[], projectiles:any})=>void }}
+ */
 export function createCollisionSystem() {
   function checkCircle(c1, c2) {
     const dx = c1.x - c2.x;

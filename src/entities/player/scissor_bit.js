@@ -1,4 +1,10 @@
 // src/entities/player/scissor_bit.js
+/**
+ * 创建 SCISSOR 武器：
+ * - 按住触发定频率斩击
+ * - 选择可用 bit 调用 bit.triggerSlash 做“十字斩”
+ * @returns {{name:string, update:(g:any, owner:any)=>void}}
+ */
 export function createScissorBit({ id, owner }) {
   const bit = {
     id: `player.scissor.${id}`,
