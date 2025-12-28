@@ -64,13 +64,6 @@ export function createRailgunWeapon() {
             const muzzleY = owner.y - 85;
             g.camera.addShake(20);
             g.spawn.particle({
-              type: 'explosion',
-              x: owner.x,
-              y: muzzleY,
-              color: '#fff',
-              size: 90,
-            });
-            g.spawn.particle({
               type: 'shockwave',
               x: owner.x,
               y: muzzleY,

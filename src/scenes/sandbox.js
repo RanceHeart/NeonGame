@@ -32,7 +32,7 @@ export function createSandboxScene() {
         spawnShipExplosion: (x, y, col) => world.spawnShipExplosion(x, y, col),
       };
 
-      // 初始化时设置 (会被后续场景的 init 覆盖，所以 show/update 里需要恢复)
+      // 初始化时设置
       g.spawn = sceneSpawn;
 
       g.state = {
@@ -41,6 +41,9 @@ export function createSandboxScene() {
         weapon: 'RIFLE',
         bossPhase: 0,
       };
+
+      // NEW: Attach finder
+      g.findTarget = world.findRandomEnemy;
 
       const player = createHarutePlayer();
       world.addEntity(player);
@@ -59,31 +62,19 @@ export function createSandboxScene() {
         world.addEntity(bit);
       }
 
-      // === NEW: Spawn Variety of Enemies ===
-
-      // 1. Phalanx Wall (Frigates)
+      // Enemies
       for (let i = 0; i < 3; i++) {
         g.spawn.enemy('phalanx', { x: 100 + i * 120, y: 100 + i * 30 });
       }
-
-      // 2. Vector Swarm (Interceptors)
       for (let i = 0; i < 5; i++) {
         g.spawn.enemy('vector', {
           x: Math.random() * g.screen.w,
           y: -Math.random() * 200,
         });
       }
-
-      // 3. Gauss Sniper (Destroyer)
       g.spawn.enemy('gauss', { x: g.screen.w - 100, y: 150 });
-
-      // Keep some original drones for comparison
       for (let i = 0; i < 5; i++) {
-        g.spawn.enemy('drone', {
-          x: 50 + i * 50,
-          y: 300,
-          phase: 0,
-        });
+        g.spawn.enemy('drone', { x: 50 + i * 50, y: 300, phase: 0 });
       }
 
       isActive = true;
@@ -96,6 +87,8 @@ export function createSandboxScene() {
       if (sceneSpawn) {
         g.spawn = sceneSpawn;
       }
+      // Re-bind finder
+      g.findTarget = world.findRandomEnemy;
       hud.show();
     },
 
@@ -112,6 +105,9 @@ export function createSandboxScene() {
       // === 双重保险：确保 update 时 spawn 指向自己 ===
       if (sceneSpawn && g.spawn !== sceneSpawn) {
         g.spawn = sceneSpawn;
+      }
+      if (g.findTarget !== world.findRandomEnemy) {
+        g.findTarget = world.findRandomEnemy;
       }
 
       hud.update(g);

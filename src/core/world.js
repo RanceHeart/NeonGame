@@ -14,6 +14,7 @@ import { createCollisionSystem } from '../systems/collisions.js';
  *  spawnParticle:(p:any)=>void,
  *  spawnHitEffect:(x:number, y:number, type:string, color:string)=>void,
  *  spawnShipExplosion:(x:number, y:number, color:string)=>void,
+ *  findRandomEnemy:(x:number, y:number, range:number)=>any,
  *  clearTransients:()=>void,
  *  update:(g:any)=>void,
  *  render:(g:any)=>void,
@@ -49,6 +50,28 @@ export function createWorld() {
     if (particles.spawnShipExplosion) {
       particles.spawnShipExplosion(x, y, color);
     }
+  }
+
+  // === 新增：寻找范围内的随机敌人 ===
+  function findRandomEnemy(x, y, range) {
+    const targets = entities.filter(
+      (e) => e.alive && (e.tags.includes('enemy') || e.tags.includes('boss')),
+    );
+
+    if (targets.length === 0) return null;
+
+    let candidates = targets;
+    if (range) {
+      candidates = targets.filter((e) => {
+        const dx = e.x - x;
+        const dy = e.y - y;
+        return dx * dx + dy * dy <= range * range;
+      });
+    }
+
+    if (candidates.length === 0) return null;
+
+    return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
   // === 关键修复：清理临时对象（子弹/粒子），防止跨场景残留 ===
@@ -95,7 +118,8 @@ export function createWorld() {
     spawnParticle,
     spawnHitEffect,
     spawnShipExplosion,
-    clearTransients, // Exported
+    findRandomEnemy, // 导出此方法
+    clearTransients, // 导出清理方法
     update,
     render,
     debug: { entities, projectiles, particles },

@@ -63,6 +63,7 @@ export function createVlsMissiles() {
           tx,
           ty,
           life: 300,
+          width: 80,
           state: 'EJECT',
           timer: 10 + r3 * 10,
           speed: 0,

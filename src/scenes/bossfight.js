@@ -35,6 +35,9 @@ export function createBossFightScene() {
         bossPhase: 1,
       };
 
+      // NEW: Attach finder to g so entities can use it
+      g.findTarget = world.findRandomEnemy;
+
       const player = createHarutePlayer();
       world.addEntity(player);
 
@@ -60,6 +63,9 @@ export function createBossFightScene() {
       if (sceneSpawn) {
         g.spawn = sceneSpawn;
       }
+      // Re-bind finder
+      g.findTarget = world.findRandomEnemy;
+
       hud.show();
       if (g.state) g.state.activeScene = 'boss';
       hud.sync();
@@ -78,6 +84,10 @@ export function createBossFightScene() {
       // === 双重保险 ===
       if (sceneSpawn && g.spawn !== sceneSpawn) {
         g.spawn = sceneSpawn;
+      }
+
+      if (g.findTarget !== world.findRandomEnemy) {
+        g.findTarget = world.findRandomEnemy;
       }
 
       hud.update(g);

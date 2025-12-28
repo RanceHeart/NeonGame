@@ -25,6 +25,7 @@ export function createFunnelBit({ id, owner }) {
     state: 'DOCKED',
     stateTimer: 0,
     cooldown: 0,
+    target: null, // NEW: Current enemy target
 
     // 视觉变量
     openFactor: 0,
@@ -48,6 +49,7 @@ export function createFunnelBit({ id, owner }) {
 
       if (!isFiring && (bit.state === 'ATTACK' || bit.state === 'EJECT')) {
         bit.state = 'RETURN';
+        bit.target = null;
         bit.vx = 0;
         bit.vy = 0;
       }
@@ -107,10 +109,28 @@ export function createFunnelBit({ id, owner }) {
     },
 
     updateAttack(g, isMarute) {
-      const orbitRad = isMarute ? 100 : 80;
-      const t = g.time.frame * 0.05 + bit.bitId;
-      const tx = g.input.pointer.x + Math.cos(t) * orbitRad;
-      const ty = g.input.pointer.y + Math.sin(t) * (orbitRad * 0.6);
+      // === UPDATED: Target Selection ===
+      if (!bit.target || !bit.target.alive) {
+        // Try to find a new target
+        if (g.findTarget) {
+          bit.target = g.findTarget(bit.x, bit.y, 600); // 600px range
+        }
+      }
+
+      let tx, ty;
+      if (bit.target && bit.target.alive) {
+        // Attack Target: Orbit slightly randomized around target
+        const t = g.time.frame * 0.05 + bit.bitId;
+        const orbitRad = 120;
+        tx = bit.target.x + Math.cos(t) * orbitRad;
+        ty = bit.target.y + Math.sin(t) * (orbitRad * 0.6);
+      } else {
+        // Fallback: Orbit Mouse/Pointer
+        const orbitRad = isMarute ? 100 : 80;
+        const t = g.time.frame * 0.05 + bit.bitId;
+        tx = g.input.pointer.x + Math.cos(t) * orbitRad;
+        ty = g.input.pointer.y + Math.sin(t) * (orbitRad * 0.6);
+      }
 
       const dx = tx - bit.x;
       const dy = ty - bit.y;
@@ -138,10 +158,15 @@ export function createFunnelBit({ id, owner }) {
 
       const rate = isMarute ? 15 : 40;
       if ((g.time.frame + bit.bitId * 7) % rate === 0) {
-        const aimAngle = Math.atan2(
-          g.input.pointer.y - bit.y,
-          g.input.pointer.x - bit.x,
-        );
+        let aimAngle;
+        if (bit.target && bit.target.alive) {
+          aimAngle = Math.atan2(bit.target.y - bit.y, bit.target.x - bit.x);
+        } else {
+          aimAngle = Math.atan2(
+            g.input.pointer.y - bit.y,
+            g.input.pointer.x - bit.x,
+          );
+        }
         bit.fire(g, isMarute, aimAngle);
       }
     },
@@ -215,15 +240,6 @@ export function createFunnelBit({ id, owner }) {
       const kick = isMarute ? 2 : 1;
       bit.vx -= Math.cos(aimAngle) * kick;
       bit.vy -= Math.sin(aimAngle) * kick;
-
-      g.spawn.particle({
-        type: 'explosion',
-        x: bit.x + Math.cos(aimAngle) * 10,
-        y: bit.y + Math.sin(aimAngle) * 10,
-        color: '#fff',
-        size: isMarute ? 12 : 6,
-        decay: 0.3,
-      });
 
       g.spawn.projectile({
         type: 'funnel_beam',

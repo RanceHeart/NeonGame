@@ -23,6 +23,7 @@ export function createScissorBit({ id, owner }) {
     // State Machine: DOCKED | DEPLOY | HUNT | CHAOS_CUT | COOLDOWN | RETURN
     state: 'DOCKED',
     timer: 0,
+    target: null, // NEW: Current target
 
     // Slash Parameters
     chaosCenter: { x: 0, y: 0 },
@@ -71,6 +72,7 @@ export function createScissorBit({ id, owner }) {
       // 2. Forced Return
       if (!isActive && bit.state !== 'DOCKED' && bit.state !== 'RETURN') {
         bit.state = 'RETURN';
+        bit.target = null;
       }
 
       // --- Behavior Execution ---
@@ -154,8 +156,22 @@ export function createScissorBit({ id, owner }) {
     updateHunt(g, isMarute) {
       bit.bladeOpen = 1.0;
 
-      const tx = g.input.pointer.x;
-      const ty = g.input.pointer.y;
+      // === UPDATED: Find Target ===
+      if (!bit.target || !bit.target.alive) {
+        if (g.findTarget) {
+          bit.target = g.findTarget(bit.x, bit.y, 800);
+        }
+      }
+
+      let tx, ty;
+      if (bit.target && bit.target.alive) {
+        tx = bit.target.x;
+        ty = bit.target.y;
+      } else {
+        tx = g.input.pointer.x;
+        ty = g.input.pointer.y;
+      }
+
       const dx = tx - bit.x;
       const dy = ty - bit.y;
       const dist = Math.hypot(dx, dy);
@@ -188,8 +204,15 @@ export function createScissorBit({ id, owner }) {
 
     updateChaosCut(g, isMarute) {
       bit.bladeOpen = 1.2;
-      bit.chaosCenter.x += (g.input.pointer.x - bit.chaosCenter.x) * 0.1;
-      bit.chaosCenter.y += (g.input.pointer.y - bit.chaosCenter.y) * 0.1;
+
+      // Update Center if tracking a living target
+      if (bit.target && bit.target.alive) {
+        bit.chaosCenter.x += (bit.target.x - bit.chaosCenter.x) * 0.1;
+        bit.chaosCenter.y += (bit.target.y - bit.chaosCenter.y) * 0.1;
+      } else {
+        bit.chaosCenter.x += (g.input.pointer.x - bit.chaosCenter.x) * 0.1;
+        bit.chaosCenter.y += (g.input.pointer.y - bit.chaosCenter.y) * 0.1;
+      }
 
       // ✅ 常态：每刀间隔更长（切割速度更慢）
       const waitFrames = isMarute ? 1 : 25;
@@ -280,14 +303,6 @@ export function createScissorBit({ id, owner }) {
           bit.y = bit.dashTarget.y;
 
           if (isMarute) {
-            g.spawn.particle({
-              type: 'explosion',
-              x: bit.x,
-              y: bit.y,
-              color: '#fff',
-              size: 30,
-              decay: 0.2,
-            });
             g.camera.addShake(2);
           }
 
@@ -316,8 +331,17 @@ export function createScissorBit({ id, owner }) {
       bit.timer--;
       bit.vx *= 0.9;
       bit.vy *= 0.9;
-      const dx = g.input.pointer.x - bit.x;
-      const dy = g.input.pointer.y - bit.y;
+      // Drift towards target or pointer
+      let tx, ty;
+      if (bit.target && bit.target.alive) {
+        tx = bit.target.x;
+        ty = bit.target.y;
+      } else {
+        tx = g.input.pointer.x;
+        ty = g.input.pointer.y;
+      }
+      const dx = tx - bit.x;
+      const dy = ty - bit.y;
       bit.vx += dx * 0.02;
       bit.vy += dy * 0.02;
       if (bit.timer <= 0) {

@@ -96,14 +96,6 @@ export function createProjectileSystem() {
       if (p.timer <= 0) {
         p.state = 'TRACK';
         p.speed = 3;
-        g.spawn.particle({
-          type: 'explosion',
-          x: p.x,
-          y: p.y,
-          color: '#fff',
-          size: 8,
-          decay: 0.2,
-        });
       }
     } else {
       if (p.speed < p.maxSpeed) p.speed += 0.8;

@@ -7,7 +7,7 @@
  * @returns {{ spawn:(p:any)=>void, spawnHitEffect:(x,y,type,col)=>void, spawnShipExplosion:(x,y,col)=>void, clear:()=>void, update:(g:any)=>void, render:(g:any)=>void, list:any[] }}
  */
 export function createParticleSystem() {
-  const list = [];
+  let list = [];
 
   function spawn(p) {
     const life = p.life || 30;
@@ -18,7 +18,7 @@ export function createParticleSystem() {
       maxLife: p.maxLife || life,
       vx: p.vx || 0,
       vy: p.vy || 0,
-      // Debris specific properties
+      // Debris 专用属性
       rot: Math.random() * Math.PI * 2,
       rotSpd: (Math.random() - 0.5) * 0.2,
       shape: Math.floor(Math.random() * 3), // 0:Tri, 1:Rect, 2:Shard
@@ -29,7 +29,7 @@ export function createParticleSystem() {
 
   // === 关键修复：添加清空方法 ===
   function clear() {
-    list.length = 0;
+    list = [];
   }
 
   function spawnHitEffect(x, y, weaponType, color) {
@@ -69,15 +69,22 @@ export function createParticleSystem() {
         });
       }
     } else if (weaponType === 'RAILGUN') {
-      spawn({
-        type: 'SHOCKWAVE',
-        x,
-        y,
-        life: 15,
-        maxLife: 15,
-        size: 30,
-        color,
-      });
+      // === 1. Railgun 爆炸散布修正 ===
+      // 在中心点周围随机生成爆炸圈，而不是全部重叠在中心
+      for (let i = 0; i < 4; i++) {
+        const ox = (Math.random() - 0.5) * 50;
+        const oy = (Math.random() - 0.5) * 50;
+        spawn({
+          type: 'SHOCKWAVE',
+          x: x + ox,
+          y: y + oy,
+          life: 15,
+          maxLife: 15,
+          size: 30,
+          color,
+        });
+      }
+      // 大量火花散布
       for (let i = 0; i < 20; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 10 + Math.random() * 15;
@@ -93,11 +100,12 @@ export function createParticleSystem() {
           color,
         });
       }
+      // 烟雾散布
       for (let i = 0; i < 5; i++) {
         spawn({
           type: 'SMOKE',
-          x: x + (Math.random() - 0.5) * 20,
-          y: y + (Math.random() - 0.5) * 20,
+          x: x + (Math.random() - 0.5) * 60,
+          y: y + (Math.random() - 0.5) * 60,
           vx: (Math.random() - 0.5) * 2,
           vy: (Math.random() - 0.5) * 2,
           life: 30,
@@ -181,9 +189,8 @@ export function createParticleSystem() {
     }
   }
 
-  // === NEW: Massive Death Effect ===
   function spawnShipExplosion(x, y, color) {
-    // 1. Core Flash
+    // === 3. 死亡特效：碎片 (Debris) + 大爆炸 ===
     spawn({
       type: 'SHOCKWAVE',
       x,
@@ -204,24 +211,24 @@ export function createParticleSystem() {
       width: 5,
     });
 
-    // 2. Debris (Ship Parts)
-    for (let i = 0; i < 15; i++) {
+    // 碎片飞溅 (参考 HTML 代码)
+    for (let i = 0; i < 25; i++) {
       const ang = Math.random() * Math.PI * 2;
-      const spd = 2 + Math.random() * 5;
+      const spd = 2 + Math.random() * 6;
       spawn({
         type: 'DEBRIS',
         x: x,
         y: y,
         vx: Math.cos(ang) * spd,
         vy: Math.sin(ang) * spd,
-        color: i % 2 === 0 ? color : '#555', // Mix hull color and ship color
-        life: 60 + Math.random() * 60,
+        color: i % 2 === 0 ? color : '#555', // 混合机体颜色和灰色
+        life: 80 + Math.random() * 40,
         w: 5 + Math.random() * 10,
         h: 5 + Math.random() * 10,
       });
     }
 
-    // 3. Fireball Cloud
+    // 连环爆炸云
     for (let i = 0; i < 20; i++) {
       const ang = Math.random() * Math.PI * 2;
       const dist = Math.random() * 30;
@@ -256,16 +263,17 @@ export function createParticleSystem() {
         p.vx *= 0.95;
         p.vy *= 0.95;
         p.size *= 0.94;
-      } else if (p.type === 'SPARK' || p.type === 'DEBRIS') {
+      } else if (
+        p.type === 'SPARK' ||
+        p.type === 'DEBRIS' ||
+        p.type === 'EXPLOSION'
+      ) {
         p.vx *= FRICTION;
         p.vy *= FRICTION;
       } else if (p.type === 'SLASH') {
         p.size *= 0.9;
       } else if (p.type === 'BEAM_TRAIL') {
         p.size *= 0.8;
-      } else if (p.type === 'EXPLOSION') {
-        p.vx *= FRICTION;
-        p.vy *= FRICTION;
       }
 
       if (p.life <= 0) list.splice(i, 1);
@@ -286,24 +294,23 @@ export function createParticleSystem() {
       ctx.strokeStyle = p.color || '#fff';
 
       if (p.type === 'DEBRIS') {
-        // Debris Rendering
+        // === 绘制碎片 ===
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(p.rot);
         ctx.fillStyle = p.color;
-        // Simple switch based on shape ID
         if (p.shape === 0) {
-          // Triangle
+          // 三角
           ctx.beginPath();
           ctx.moveTo(-p.w / 2, p.h / 2);
           ctx.lineTo(0, -p.h / 2);
           ctx.lineTo(p.w / 2, p.h / 2);
           ctx.fill();
         } else if (p.shape === 1) {
-          // Rect
+          // 矩形
           ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
         } else {
-          // Shard
+          // 碎片条
           ctx.fillRect(-p.w / 2, -1, p.w, 2);
         }
         ctx.restore();
@@ -359,25 +366,18 @@ export function createParticleSystem() {
         ctx.moveTo(p.x, p.y);
         ctx.lineTo(p.x - p.vx * 2, p.y - p.vy * 2);
         ctx.stroke();
-      } else if (p.type === 'SMOKE' || p.type === 'GN_SMOKE') {
+      } else if (
+        p.type === 'SMOKE' ||
+        p.type === 'GN_SMOKE' ||
+        p.type === 'EXPLOSION' ||
+        p.type === 'FLASH'
+      ) {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
-      } else if (p.type === 'FLASH') {
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = p.color;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * progress, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
       } else if (p.type === 'BEAM_TRAIL') {
         const s = p.size;
         ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
-      } else if (p.type === 'EXPLOSION') {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * (1.2 - progress), 0, Math.PI * 2);
-        ctx.fill();
       } else {
         // Fallback
         ctx.fillRect(p.x, p.y, p.size || 2, p.size || 2);
@@ -388,9 +388,9 @@ export function createParticleSystem() {
 
   return {
     spawn,
+    clear,
     spawnHitEffect,
     spawnShipExplosion,
-    clear,
     update,
     render,
     list,
